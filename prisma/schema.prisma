@@ -1,0 +1,266 @@
+// CargoIQ Platform — Database Schema
+// Multi-tenant SaaS platform for AI compliance and cost containment
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organisation {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  plan              String   @default("pilot") // pilot | starter | growth | enterprise
+  status            String   @default("active") // active | suspended | cancelled
+  cwServerUrl       String?
+  cwEnterpriseId    String?
+  cwServerId        String?
+  cwCredentialsEnc  String?  // AES-256 encrypted JSON
+  confidenceAutoApprove    Float @default(0.90)
+  confidenceReviewRequired Float @default(0.75)
+  settings          String   @default("{}") // JSON string
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  users             User[]
+  emailConnections  EmailConnection[]
+  shipments         Shipment[]
+  rlaStatuses       RlaStatus[]
+  wisetechTransactions WisetechTransaction[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  orgId         String
+  email         String
+  fullName      String?
+  role          String   @default("operator") // admin | operations_manager | operator | viewer
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  organisation  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, email])
+}
+
+model EmailConnection {
+  id              String   @id @default(cuid())
+  orgId           String
+  type            String   // gmail | outlook | imap
+  emailAddress    String
+  credentialsEnc  String?
+  status          String   @default("active") // active | disconnected | error
+  lastSyncedAt    DateTime?
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+
+  organisation    Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  inboundEmails   InboundEmail[]
+}
+
+model InboundEmail {
+  id             String   @id @default(cuid())
+  orgId          String
+  connectionId   String?
+  messageId      String?
+  fromAddress    String?
+  subject        String?
+  bodyPreview    String?
+  receivedAt     DateTime?
+  classification String?  // freight | non_freight | unknown
+  status         String   @default("received") // received | processing | processed | ignored
+  createdAt      DateTime @default(now())
+
+  emailConnection EmailConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  documents       Document[]
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  orgId        String
+  emailId      String?
+  storagePath  String
+  filename     String?
+  fileType     String?  // pdf | jpg | png | docx | xlsx
+  docType      String?  // commercial_invoice | packing_list | awb | bl | certificate | other | unknown
+  pageCount    Int?
+  rawText      String?
+  status       String   @default("pending") // pending | processing | processed | failed
+  createdAt    DateTime @default(now())
+
+  inboundEmail InboundEmail?  @relation(fields: [emailId], references: [id], onDelete: SetNull)
+  shipmentDocs ShipmentDocument[]
+}
+
+model Shipment {
+  id                 String   @id @default(cuid())
+  orgId              String
+  reference          String?  // auto-generated: CIQ-2026-00001
+
+  // Core extracted fields
+  shipperName        String?
+  shipperAddress     String?
+  consigneeName      String?
+  consigneeAddress   String?
+  notifyParty        String?
+  originPort         String?
+  destinationPort    String?
+  cargoDescription   String?
+  hsCodePrimary      String?
+  grossWeight        Float?
+  netWeight          Float?
+  weightUnit         String   @default("KGS")
+  numberOfPackages   Int?
+  incoterms          String?
+  invoiceNumber      String?
+  invoiceValue       Float?
+  currency           String   @default("USD")
+  awbOrBlNumber      String?
+  vesselOrFlight     String?
+  eta                DateTime?
+  etd                DateTime?
+  shipmentType       String?  // air_import | air_export | fcl_import | fcl_export | lcl_import | lcl_export | customs_only
+
+  extractedFields    String   @default("{}") // JSON
+  confidenceScores   String   @default("{}") // JSON
+  overallConfidence  String?  // high | medium | low
+
+  shieldStatus       String?  // pass | hold | fail | pending
+  shieldResults      String   @default("{}") // JSON
+
+  status             String   @default("pending") // pending | review_required | approved | rejected | in_cargowise | cw_draft_created | error
+  cargowiseJobId     String?
+  cargowiseDraftUrl  String?
+
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  reviewNotes        String?
+
+  source             String?  // email | whatsapp | manual_upload
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organisation       Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  shipmentDocuments  ShipmentDocument[]
+  lineItems          CargoLineItem[]
+  complianceEvents   ComplianceEvent[]
+  cwExecutions       CwExecution[]
+  auditLogs          AuditLog[]
+
+  @@unique([orgId, reference])
+}
+
+model ShipmentDocument {
+  shipmentId String
+  documentId String
+
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([shipmentId, documentId])
+}
+
+model CargoLineItem {
+  id           String   @id @default(cuid())
+  shipmentId   String
+  lineNumber   Int
+  hsCode       String?
+  description  String?
+  quantity     Float?
+  unit         String?
+  unitWeight   Float?
+  totalWeight  Float?
+  unitValue    Float?
+  totalValue   Float?
+  currency     String?
+  confidence   String?  // high | medium | low
+  createdAt    DateTime @default(now())
+
+  shipment     Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+model ComplianceEvent {
+  id              String   @id @default(cuid())
+  orgId           String
+  shipmentId      String
+  module          String   // invoice_pl | hs_code | vat_engine | rla | da65 | da179
+  result          String   // pass | hold | fail
+  detail          String   @default("{}") // JSON
+  penaltyRisk     Boolean  @default(false)
+  autoResolved    Boolean  @default(false)
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  resolutionNote  String?
+  createdAt       DateTime @default(now())
+
+  shipment        Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  orgId       String
+  entityType  String   // shipment | document | compliance_event | user | integration
+  entityId    String?
+  action      String   // extracted | shield_checked | approved | rejected | pushed_to_cw | user_edited
+  actorType   String   // ai_system | user | system
+  actorId     String?
+  beforeState String?  // JSON
+  afterState  String?  // JSON
+  metadata    String   @default("{}") // JSON
+  createdAt   DateTime @default(now())
+
+  shipment    Shipment? @relation(fields: [entityId], references: [id])
+}
+
+model CwExecution {
+  id             String   @id @default(cuid())
+  orgId          String
+  shipmentId     String
+  executionType  String   // playwright | eadaptor_xml
+  status         String   @default("queued") // queued | running | success | failed
+  xmlPayload     String?
+  screenshotUrl  String?
+  cwResponse     String?
+  durationMs     Int?
+  errorMessage   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  shipment       Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+model RlaStatus {
+  id              String   @id @default(cuid())
+  orgId           String
+  importerCode    String
+  importerName    String?
+  rlaStatus       String   // active | suspended | inactive | unverified
+  lastCheckedAt   DateTime?
+  suspendedSince  DateTime?
+  alertSent       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  organisation    Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, importerCode])
+}
+
+model WisetechTransaction {
+  id                  String   @id @default(cuid())
+  orgId               String
+  date                DateTime
+  originalCount       Int
+  compactedCount      Int
+  estimatedSavingUsd  Float?
+  createdAt           DateTime @default(now())
+
+  organisation        Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, date])
+}

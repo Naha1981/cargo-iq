@@ -1,0 +1,769 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ──────────────────────────────────────────────
+   CargoIQ Design System — Tailwind CSS 4 Tokens
+   ────────────────────────────────────────────── */
+
+@theme inline {
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "JetBrains Mono", ui-monospace, monospace;
+
+  /* Radii */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* ── Core palette ── */
+  --color-bg-canvas: var(--ciq-bg-canvas);
+  --color-bg-surface: var(--ciq-bg-surface);
+  --color-bg-subtle: var(--ciq-bg-subtle);
+  --color-bg-inset: var(--ciq-bg-inset);
+
+  /* ── Navigation ── */
+  --color-nav-bg: var(--ciq-nav-bg);
+  --color-nav-active: var(--ciq-nav-active);
+  --color-nav-hover: var(--ciq-nav-hover);
+  --color-nav-text: var(--ciq-nav-text);
+  --color-nav-text-muted: var(--ciq-nav-text-muted);
+  --color-nav-border: var(--ciq-nav-border);
+
+  /* ── Accent ── */
+  --color-accent: var(--ciq-accent);
+  --color-accent-hover: var(--ciq-accent-hover);
+  --color-accent-subtle: var(--ciq-accent-subtle);
+  --color-accent-border: var(--ciq-accent-border);
+
+  /* ── Text ── */
+  --color-text-primary: var(--ciq-text-primary);
+  --color-text-secondary: var(--ciq-text-secondary);
+  --color-text-tertiary: var(--ciq-text-tertiary);
+  --color-text-disabled: var(--ciq-text-disabled);
+  --color-text-inverse: var(--ciq-text-inverse);
+
+  /* ── Borders ── */
+  --color-border: var(--ciq-border);
+  --color-border-strong: var(--ciq-border-strong);
+  --color-border-subtle: var(--ciq-border-subtle);
+
+  /* ── Semantic status ── */
+  --color-success: var(--ciq-success);
+  --color-success-bg: var(--ciq-success-bg);
+  --color-success-border: var(--ciq-success-border);
+  --color-warning: var(--ciq-warning);
+  --color-warning-bg: var(--ciq-warning-bg);
+  --color-warning-border: var(--ciq-warning-border);
+  --color-error: var(--ciq-error);
+  --color-error-bg: var(--ciq-error-bg);
+  --color-error-border: var(--ciq-error-border);
+  --color-info: var(--ciq-info);
+  --color-info-bg: var(--ciq-info-bg);
+  --color-info-border: var(--ciq-info-border);
+
+  /* ── shadcn/ui bridge ── */
+  --color-background: var(--ciq-bg-canvas);
+  --color-foreground: var(--ciq-text-primary);
+  --color-card: var(--ciq-bg-surface);
+  --color-card-foreground: var(--ciq-text-primary);
+  --color-popover: var(--ciq-bg-surface);
+  --color-popover-foreground: var(--ciq-text-primary);
+  --color-primary: var(--ciq-nav-bg);
+  --color-primary-foreground: var(--ciq-text-inverse);
+  --color-secondary: var(--ciq-bg-subtle);
+  --color-secondary-foreground: var(--ciq-text-primary);
+  --color-muted: var(--ciq-bg-subtle);
+  --color-muted-foreground: var(--ciq-text-secondary);
+  --color-accent-foreground: var(--ciq-text-primary);
+  --color-destructive: var(--ciq-error);
+  --color-input: var(--ciq-border);
+  --color-ring: var(--ciq-accent);
+
+  --color-sidebar: var(--ciq-nav-bg);
+  --color-sidebar-foreground: var(--ciq-nav-text);
+  --color-sidebar-primary: var(--ciq-accent);
+  --color-sidebar-primary-foreground: #FFFFFF;
+  --color-sidebar-accent: var(--ciq-nav-active);
+  --color-sidebar-accent-foreground: var(--ciq-nav-text);
+  --color-sidebar-border: var(--ciq-nav-border);
+  --color-sidebar-ring: var(--ciq-accent);
+
+  --color-chart-1: var(--ciq-accent);
+  --color-chart-2: var(--ciq-info);
+  --color-chart-3: var(--ciq-success);
+  --color-chart-4: var(--ciq-warning);
+  --color-chart-5: var(--ciq-error);
+
+  /* ── Layout tokens ── */
+  --spacing-sidebar: 240px;
+  --spacing-sidebar-collapsed: 56px;
+  --spacing-topnav: 56px;
+}
+
+/* ──────────────────────────────────────────────
+   CargoIQ Light Theme (default)
+   ────────────────────────────────────────────── */
+
+:root {
+  --radius: 0.375rem; /* 6px — tight, institutional */
+
+  /* Core palette */
+  --ciq-bg-canvas: #F1F4F8;
+  --ciq-bg-surface: #FFFFFF;
+  --ciq-bg-subtle: #E8ECF1;
+  --ciq-bg-inset: #D8DDE5;
+
+  /* Navigation */
+  --ciq-nav-bg: #1A2332;
+  --ciq-nav-active: #243447;
+  --ciq-nav-hover: #1F2D3D;
+  --ciq-nav-text: #C8D3DF;
+  --ciq-nav-text-muted: #6B7E92;
+  --ciq-nav-border: #243040;
+
+  /* Accent */
+  --ciq-accent: #B8860B;
+  --ciq-accent-hover: #9A700A;
+  --ciq-accent-subtle: #FDF3DC;
+  --ciq-accent-border: #D4A843;
+
+  /* Text */
+  --ciq-text-primary: #0D1B2A;
+  --ciq-text-secondary: #3D5166;
+  --ciq-text-tertiary: #6B7E92;
+  --ciq-text-disabled: #9AAAB8;
+  --ciq-text-inverse: #F1F4F8;
+
+  /* Borders */
+  --ciq-border: #C8D0DA;
+  --ciq-border-strong: #9AAAB8;
+  --ciq-border-subtle: #DDE3EA;
+
+  /* Semantic status */
+  --ciq-success: #15632A;
+  --ciq-success-bg: #EBF5EE;
+  --ciq-success-border: #8EC9A0;
+  --ciq-warning: #7A4F00;
+  --ciq-warning-bg: #FEF6E7;
+  --ciq-warning-border: #E8B84B;
+  --ciq-error: #9B1C1C;
+  --ciq-error-bg: #FEF2F2;
+  --ciq-error-border: #F5A5A5;
+  --ciq-info: #1A4971;
+  --ciq-info-bg: #EBF3FB;
+  --ciq-info-border: #93C5E4;
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 56px;
+  --topnav-height: 56px;
+}
+
+/* ──────────────────────────────────────────────
+   CargoIQ Dark Theme
+   ────────────────────────────────────────────── */
+
+.dark {
+  /* Core palette */
+  --ciq-bg-canvas: #0F1520;
+  --ciq-bg-surface: #1A2332;
+  --ciq-bg-subtle: #243040;
+  --ciq-bg-inset: #1F2D3D;
+
+  /* Navigation */
+  --ciq-nav-bg: #0D1420;
+  --ciq-nav-active: #1A2332;
+  --ciq-nav-hover: #141C28;
+  --ciq-nav-text: #C8D3DF;
+  --ciq-nav-text-muted: #6B7E92;
+  --ciq-nav-border: #243040;
+
+  /* Accent */
+  --ciq-accent: #D4A843;
+  --ciq-accent-hover: #B8860B;
+  --ciq-accent-subtle: #2A2210;
+  --ciq-accent-border: #9A700A;
+
+  /* Text */
+  --ciq-text-primary: #E8ECF1;
+  --ciq-text-secondary: #9AAAB8;
+  --ciq-text-tertiary: #6B7E92;
+  --ciq-text-disabled: #4A5C6E;
+  --ciq-text-inverse: #0D1B2A;
+
+  /* Borders */
+  --ciq-border: #2A3648;
+  --ciq-border-strong: #3D5166;
+  --ciq-border-subtle: #1F2D3D;
+
+  /* Semantic status */
+  --ciq-success: #3FB55A;
+  --ciq-success-bg: #0D2214;
+  --ciq-success-border: #1D5C2F;
+  --ciq-warning: #E8B84B;
+  --ciq-warning-bg: #2A1F08;
+  --ciq-warning-border: #7A4F00;
+  --ciq-error: #F5A5A5;
+  --ciq-error-bg: #2A0F0F;
+  --ciq-error-border: #9B1C1C;
+  --ciq-info: #93C5E4;
+  --ciq-info-bg: #0D1E2E;
+  --ciq-info-border: #1A4971;
+}
+
+/* ──────────────────────────────────────────────
+   Base Layer
+   ────────────────────────────────────────────── */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-bg-canvas text-text-primary;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ciq-text-primary);
+    background-color: var(--ciq-bg-canvas);
+  }
+
+  /* Typographic scale */
+  h1 { font-size: 36px; line-height: 1.2; font-weight: 700; letter-spacing: -0.025em; }
+  h2 { font-size: 30px; line-height: 1.25; font-weight: 700; letter-spacing: -0.02em; }
+  h3 { font-size: 24px; line-height: 1.3; font-weight: 600; letter-spacing: -0.015em; }
+  h4 { font-size: 20px; line-height: 1.35; font-weight: 600; }
+  h5 { font-size: 17px; line-height: 1.4; font-weight: 600; }
+  h6 { font-size: 15px; line-height: 1.45; font-weight: 600; }
+
+  /* Reduce heading weight inside dense data views */
+  .ciq-dense h4,
+  .ciq-dense h5,
+  .ciq-dense h6 {
+    font-weight: 600;
+  }
+
+  /* Monospace for data */
+  .ciq-mono,
+  [data-mono] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ──────────────────────────────────────────────
+   Component: Focus Ring
+   ────────────────────────────────────────────── */
+
+@layer utilities {
+  .ciq-focus {
+    outline: 2px solid var(--ciq-accent);
+    outline-offset: 1px;
+    border-radius: 2px;
+  }
+
+  .ciq-focus-ring {
+    &:focus-visible {
+      outline: 2px solid var(--ciq-accent);
+      outline-offset: 1px;
+      border-radius: 2px;
+    }
+  }
+
+  /* Typographic scale utilities */
+  .text-2xs { font-size: 11px; line-height: 1.45; }
+  .text-xs-sm { font-size: 13px; line-height: 1.45; }
+  .text-md { font-size: 15px; line-height: 1.5; }
+  .text-lg { font-size: 17px; line-height: 1.5; }
+  .text-xl { font-size: 20px; line-height: 1.4; }
+  .text-2xl { font-size: 24px; line-height: 1.35; }
+  .text-3xl { font-size: 30px; line-height: 1.25; }
+  .text-4xl { font-size: 36px; line-height: 1.2; }
+}
+
+/* ──────────────────────────────────────────────
+   Component: Card
+   ────────────────────────────────────────────── */
+
+.ciq-card {
+  background-color: var(--ciq-bg-surface);
+  border: 1px solid var(--ciq-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+}
+
+.ciq-card--flat {
+  box-shadow: none;
+}
+
+.ciq-card--inset {
+  background-color: var(--ciq-bg-inset);
+  border-color: var(--ciq-border-strong);
+}
+
+.ciq-card-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ciq-border-subtle);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ciq-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ciq-card-body {
+  padding: 16px;
+}
+
+/* ──────────────────────────────────────────────
+   Component: Badge / Status Pill
+   ────────────────────────────────────────────── */
+
+.ciq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.ciq-badge--pass,
+.ciq-badge--success {
+  color: var(--ciq-success);
+  background-color: var(--ciq-success-bg);
+  border-color: var(--ciq-success-border);
+}
+
+.ciq-badge--review,
+.ciq-badge--warning {
+  color: var(--ciq-warning);
+  background-color: var(--ciq-warning-bg);
+  border-color: var(--ciq-warning-border);
+}
+
+.ciq-badge--fail,
+.ciq-badge--error {
+  color: var(--ciq-error);
+  background-color: var(--ciq-error-bg);
+  border-color: var(--ciq-error-border);
+}
+
+.ciq-badge--info {
+  color: var(--ciq-info);
+  background-color: var(--ciq-info-bg);
+  border-color: var(--ciq-info-border);
+}
+
+.ciq-badge--neutral {
+  color: var(--ciq-text-secondary);
+  background-color: var(--ciq-bg-subtle);
+  border-color: var(--ciq-border);
+}
+
+.ciq-badge--accent {
+  color: var(--ciq-accent);
+  background-color: var(--ciq-accent-subtle);
+  border-color: var(--ciq-accent-border);
+}
+
+/* Solid dot indicator inside badge */
+.ciq-badge::before {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+  flex-shrink: 0;
+}
+
+.ciq-badge--neutral::before {
+  display: none;
+}
+
+/* ──────────────────────────────────────────────
+   Component: Status Banner
+   ────────────────────────────────────────────── */
+
+.ciq-banner {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+
+.ciq-banner--success {
+  color: var(--ciq-success);
+  background-color: var(--ciq-success-bg);
+  border-color: var(--ciq-success-border);
+}
+
+.ciq-banner--warning {
+  color: var(--ciq-warning);
+  background-color: var(--ciq-warning-bg);
+  border-color: var(--ciq-warning-border);
+}
+
+.ciq-banner--error {
+  color: var(--ciq-error);
+  background-color: var(--ciq-error-bg);
+  border-color: var(--ciq-error-border);
+}
+
+.ciq-banner--info {
+  color: var(--ciq-info);
+  background-color: var(--ciq-info-bg);
+  border-color: var(--ciq-info-border);
+}
+
+/* ──────────────────────────────────────────────
+   Component: Data Table
+   ────────────────────────────────────────────── */
+
+.ciq-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ciq-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--ciq-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--ciq-border);
+  background-color: var(--ciq-bg-surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.ciq-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ciq-border-subtle);
+  color: var(--ciq-text-primary);
+}
+
+.ciq-table tbody tr:hover {
+  background-color: var(--ciq-bg-subtle);
+}
+
+.ciq-table tbody tr:nth-child(even) {
+  background-color: var(--ciq-bg-canvas);
+}
+
+.ciq-table tbody tr:nth-child(even):hover {
+  background-color: var(--ciq-bg-subtle);
+}
+
+/* ──────────────────────────────────────────────
+   Component: Scrollbar
+   ────────────────────────────────────────────── */
+
+.ciq-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ciq-border-strong) transparent;
+}
+
+.ciq-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ciq-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ciq-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--ciq-border-strong);
+  border-radius: 3px;
+}
+
+.ciq-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ciq-text-tertiary);
+}
+
+/* Dark sidebar scrollbar */
+.ciq-scrollbar--nav {
+  scrollbar-color: var(--ciq-nav-border) transparent;
+}
+
+.ciq-scrollbar--nav::-webkit-scrollbar-thumb {
+  background-color: var(--ciq-nav-border);
+}
+
+.ciq-scrollbar--nav::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ciq-nav-text-muted);
+}
+
+/* ──────────────────────────────────────────────
+   Component: Sidebar layout
+   ────────────────────────────────────────────── */
+
+.ciq-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background-color: var(--ciq-nav-bg);
+  border-right: 1px solid var(--ciq-nav-border);
+  z-index: 40;
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.ciq-sidebar--collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+.ciq-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  color: var(--ciq-nav-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 4px;
+  margin: 2px 8px;
+  transition: background-color 120ms ease, color 120ms ease;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ciq-sidebar-item:hover {
+  background-color: var(--ciq-nav-hover);
+  color: var(--ciq-nav-text);
+}
+
+.ciq-sidebar-item--active {
+  background-color: var(--ciq-nav-active);
+  color: var(--ciq-nav-text);
+}
+
+.ciq-sidebar-item--active:hover {
+  background-color: var(--ciq-nav-active);
+}
+
+/* ──────────────────────────────────────────────
+   Component: Top Nav
+   ────────────────────────────────────────────── */
+
+.ciq-topnav {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: var(--sidebar-width);
+  height: var(--topnav-height);
+  background-color: var(--ciq-bg-surface);
+  border-bottom: 1px solid var(--ciq-border);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  transition: left 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ciq-topnav--sidebar-collapsed {
+  left: var(--sidebar-collapsed-width);
+}
+
+/* ──────────────────────────────────────────────
+   Component: Main content area
+   ────────────────────────────────────────────── */
+
+.ciq-main {
+  margin-left: var(--sidebar-width);
+  padding-top: var(--topnav-height);
+  min-height: 100dvh;
+  transition: margin-left 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ciq-main--sidebar-collapsed {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+.ciq-main-content {
+  padding: 20px;
+  max-width: 1440px;
+}
+
+/* ──────────────────────────────────────────────
+   Component: Divider
+   ────────────────────────────────────────────── */
+
+.ciq-divider {
+  border: none;
+  border-top: 1px solid var(--ciq-border-subtle);
+  margin: 0;
+}
+
+.ciq-divider--strong {
+  border-top-color: var(--ciq-border);
+}
+
+/* ──────────────────────────────────────────────
+   Component: Metric / KPI tile
+   ────────────────────────────────────────────── */
+
+.ciq-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ciq-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ciq-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ciq-metric-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ciq-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ciq-metric-change {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ciq-metric-change--up {
+  color: var(--ciq-success);
+}
+
+.ciq-metric-change--down {
+  color: var(--ciq-error);
+}
+
+.ciq-metric-change--neutral {
+  color: var(--ciq-text-tertiary);
+}
+
+/* ──────────────────────────────────────────────
+   Component: Form inputs
+   ────────────────────────────────────────────── */
+
+.ciq-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ciq-text-primary);
+  background-color: var(--ciq-bg-surface);
+  border: 1px solid var(--ciq-border);
+  border-radius: var(--radius-md);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  font-family: var(--font-sans);
+}
+
+.ciq-input::placeholder {
+  color: var(--ciq-text-tertiary);
+}
+
+.ciq-input:hover {
+  border-color: var(--ciq-border-strong);
+}
+
+.ciq-input:focus {
+  outline: none;
+  border-color: var(--ciq-accent);
+  box-shadow: 0 0 0 2px var(--ciq-accent-subtle);
+}
+
+.ciq-input:disabled {
+  background-color: var(--ciq-bg-inset);
+  color: var(--ciq-text-disabled);
+  cursor: not-allowed;
+}
+
+/* ──────────────────────────────────────────────
+   Component: Compliance score ring (SVG helper)
+   ────────────────────────────────────────────── */
+
+.ciq-score-ring {
+  transform: rotate(-90deg);
+}
+
+.ciq-score-ring-track {
+  fill: none;
+  stroke: var(--ciq-bg-subtle);
+}
+
+.ciq-score-ring-fill {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ciq-score-ring-fill--pass { stroke: var(--ciq-success); }
+.ciq-score-ring-fill--review { stroke: var(--ciq-warning); }
+.ciq-score-ring-fill--fail { stroke: var(--ciq-error); }
+
+/* ──────────────────────────────────────────────
+   Utility: Dense data view
+   ────────────────────────────────────────────── */
+
+.ciq-dense {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ciq-dense .ciq-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+
+/* ──────────────────────────────────────────────
+   Utility: Print styles
+   ────────────────────────────────────────────── */
+
+@media print {
+  .ciq-sidebar,
+  .ciq-topnav {
+    display: none !important;
+  }
+
+  .ciq-main {
+    margin-left: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  .ciq-card {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  body {
+    background-color: white;
+  }
+}
