@@ -29,6 +29,11 @@ import {
   DollarSign,
   Zap,
   AlertCircle,
+  Menu,
+  ArrowRight,
+  Wifi,
+  WifiOff,
+  Play,
 } from "lucide-react";
 
 /* ══════════════════════════════════════════════
@@ -139,8 +144,9 @@ function ConfidenceBadge({ level }: { level: Confidence }) {
    Sidebar
    ══════════════════════════════════════════════ */
 
-function Sidebar({ view, setView, collapsed, toggleCollapse }: {
+function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobileClose }: {
   view: ViewMode; setView: (v: ViewMode) => void; collapsed: boolean; toggleCollapse: () => void;
+  mobileOpen: boolean; onMobileClose: () => void;
 }) {
   const sections = [
     { label: "Operations", items: [
@@ -157,9 +163,9 @@ function Sidebar({ view, setView, collapsed, toggleCollapse }: {
     ]},
   ];
 
-  return (
+  const sidebarContent = (
     <aside
-      className="fixed top-0 left-0 bottom-0 z-40 flex flex-col border-r transition-all duration-200"
+      className="flex flex-col border-r transition-all duration-200 h-full"
       style={{
         width: collapsed ? 56 : 240,
         backgroundColor: "#1A2332",
@@ -195,7 +201,7 @@ function Sidebar({ view, setView, collapsed, toggleCollapse }: {
               return (
                 <button
                   key={item.key}
-                  onClick={() => setView(item.key)}
+                  onClick={() => { setView(item.key); onMobileClose(); }}
                   className="flex items-center gap-2.5 w-full px-4 py-2 mx-2 rounded text-[13px] font-medium transition-colors"
                   style={{
                     width: collapsed ? 40 : "calc(100% - 16px)",
@@ -217,15 +223,40 @@ function Sidebar({ view, setView, collapsed, toggleCollapse }: {
         ))}
       </nav>
 
-      {/* Collapse toggle */}
+      {/* Collapse toggle — desktop only */}
       <button
         onClick={toggleCollapse}
-        className="flex items-center justify-center h-10 border-t transition-colors hover:bg-[#1F2D3D]"
+        className="hidden md:flex items-center justify-center h-10 border-t transition-colors hover:bg-[#1F2D3D]"
         style={{ borderColor: "#243040", color: "#6B7E92" }}
       >
         {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
     </aside>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <div className="hidden md:block fixed top-0 left-0 bottom-0 z-40">
+        {sidebarContent}
+      </div>
+
+      {/* Mobile sidebar overlay */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+            onClick={onMobileClose}
+          />
+          {/* Sidebar panel */}
+          <div className="relative z-10 h-full" style={{ width: 240 }}>
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -233,7 +264,9 @@ function Sidebar({ view, setView, collapsed, toggleCollapse }: {
    Top Nav
    ══════════════════════════════════════════════ */
 
-function TopNav({ view, collapsed }: { view: ViewMode; collapsed: boolean }) {
+function TopNav({ view, collapsed, onToggleMobileSidebar, onQuickUpload }: {
+  view: ViewMode; collapsed: boolean; onToggleMobileSidebar: () => void; onQuickUpload: () => void;
+}) {
   const viewLabels: Record<ViewMode, string> = {
     dashboard: "Dashboard",
     shipments: "Shipment Queue",
@@ -246,16 +279,24 @@ function TopNav({ view, collapsed }: { view: ViewMode; collapsed: boolean }) {
 
   return (
     <header
-      className="fixed top-0 right-0 z-30 flex items-center h-14 px-5 gap-4 border-b transition-all duration-200"
+      className="fixed top-0 right-0 z-30 flex items-center h-14 px-5 gap-3 border-b transition-all duration-200"
       style={{
-        left: collapsed ? 56 : 240,
+        left: 0,
         backgroundColor: "#FFFFFF",
         borderColor: "#C8D0DA",
       }}
     >
-      <h2 className="text-[15px] font-semibold" style={{ color: "#0D1B2A" }}>{viewLabels[view]}</h2>
+      {/* Mobile hamburger */}
+      <button
+        className="md:hidden p-1.5 rounded hover:bg-[#E8ECF1] transition-colors"
+        style={{ color: "#6B7E92" }}
+        onClick={onToggleMobileSidebar}
+      >
+        <Menu size={20} />
+      </button>
+      <h2 className="text-[15px] font-semibold truncate" style={{ color: "#0D1B2A" }}>{viewLabels[view]}</h2>
       <div className="flex-1" />
-      <div className="relative">
+      <div className="relative hidden sm:block">
         <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#9AAAB8" }} />
         <input
           placeholder="Search shipments..."
@@ -263,11 +304,20 @@ function TopNav({ view, collapsed }: { view: ViewMode; collapsed: boolean }) {
           style={{ width: 220, borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#F1F4F8" }}
         />
       </div>
+      {/* Quick Upload button */}
+      <button
+        onClick={onQuickUpload}
+        className="p-1.5 rounded hover:bg-[#E8ECF1] transition-colors"
+        style={{ color: "#6B7E92" }}
+        title="Quick Upload"
+      >
+        <Upload size={18} />
+      </button>
       <button className="relative p-1.5 rounded hover:bg-[#E8ECF1] transition-colors" style={{ color: "#6B7E92" }}>
         <Bell size={18} />
         <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />
       </button>
-      <div className="flex items-center gap-2 pl-2 border-l" style={{ borderColor: "#C8D0DA" }}>
+      <div className="hidden sm:flex items-center gap-2 pl-2 border-l" style={{ borderColor: "#C8D0DA" }}>
         <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold" style={{ backgroundColor: "#B8860B", color: "#FFF" }}>
           JM
         </div>
@@ -296,6 +346,15 @@ function DashboardView({ setView }: { setView: (v: ViewMode) => void }) {
     { label: "Pending", count: 123, color: "bg-slate-400", pct: 15 },
   ];
 
+  const pipelineSteps = [
+    { label: "Email", count: 142, status: "active" as const, icon: "📧" },
+    { label: "Classify", count: 98, status: "active" as const, icon: "🏷️" },
+    { label: "Extract", count: 87, status: "active" as const, icon: "📄" },
+    { label: "Shield", count: 72, status: "complete" as const, icon: "🛡️" },
+    { label: "Review", count: 15, status: "pending" as const, icon: "👁️" },
+    { label: "CW", count: 8, status: "pending" as const, icon: "🔗" },
+  ];
+
   return (
     <div className="p-6 max-w-[1440px]">
       {/* KPIs */}
@@ -315,6 +374,46 @@ function DashboardView({ setView }: { setView: (v: ViewMode) => void }) {
             <div className="text-[11px] font-medium uppercase tracking-wider mt-0.5" style={{ color: "#6B7E92" }}>{kpi.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* Processing Pipeline */}
+      <div className="rounded-lg border mb-6" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>PROCESSING PIPELINE</span>
+        </div>
+        <div className="p-4">
+          <div className="flex items-center justify-between gap-1 overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
+            {pipelineSteps.map((step, i) => (
+              <div key={step.label} className="flex items-center gap-1 flex-shrink-0">
+                <div
+                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-lg border min-w-[80px]"
+                  style={{
+                    backgroundColor: step.status === "active" ? "#EBF3FB" : step.status === "complete" ? "#EBF5EE" : "#F1F4F8",
+                    borderColor: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#C8D0DA",
+                  }}
+                >
+                  <span className="text-lg">{step.icon}</span>
+                  <span className="text-[11px] font-semibold" style={{ color: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#6B7E92" }}>
+                    {step.label}
+                  </span>
+                  <span className="text-[16px] font-bold" style={{ color: "#0D1B2A" }}>{step.count}</span>
+                  <span
+                    className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full"
+                    style={{
+                      color: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#6B7E92",
+                      backgroundColor: step.status === "active" ? "#D6E8F7" : step.status === "complete" ? "#C6E4CE" : "#E8ECF1",
+                    }}
+                  >
+                    {step.status}
+                  </span>
+                </div>
+                {i < pipelineSteps.length - 1 && (
+                  <ArrowRight size={16} className="flex-shrink-0" style={{ color: "#9AAAB8" }} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -733,6 +832,9 @@ function ComplianceView() {
    ══════════════════════════════════════════════ */
 
 function WiseLayerView() {
+  const [rlaLastChecked, setRlaLastChecked] = useState<string>("2026-03-04 09:42 SAST");
+  const [rlaChecking, setRlaChecking] = useState(false);
+
   const kpis = [
     { label: "Total WiseTech Fees", value: formatZAR(428500), change: "+8%", up: true, icon: DollarSign, color: "#9B1C1C", bg: "#FEF2F2" },
     { label: "Savings This Month", value: formatZAR(127400), change: "+22%", up: true, icon: TrendingDown, color: "#15632A", bg: "#EBF5EE" },
@@ -756,8 +858,38 @@ function WiseLayerView() {
   }));
   const maxVal = Math.max(...chartData.map((d) => d.fees));
 
+  // Transaction Compaction data
+  const compactionData = [
+    { date: "2026-03-04", origTx: 847, compactedTx: 312, saved: 535, estSaving: 2675.00 },
+    { date: "2026-03-03", origTx: 912, compactedTx: 298, saved: 614, estSaving: 3070.00 },
+    { date: "2026-03-02", origTx: 756, compactedTx: 287, saved: 469, estSaving: 2345.00 },
+    { date: "2026-03-01", origTx: 823, compactedTx: 341, saved: 482, estSaving: 2410.00 },
+    { date: "2026-02-28", origTx: 689, compactedTx: 256, saved: 433, estSaving: 2165.00 },
+    { date: "2026-02-27", origTx: 934, compactedTx: 312, saved: 622, estSaving: 3110.00 },
+    { date: "2026-02-26", origTx: 781, compactedTx: 298, saved: 483, estSaving: 2415.00 },
+  ];
+
+  const handleRunCheck = () => {
+    setRlaChecking(true);
+    setTimeout(() => {
+      const now = new Date();
+      const pad = (n: number) => n.toString().padStart(2, "0");
+      setRlaLastChecked(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} SAST`);
+      setRlaChecking(false);
+    }, 1500);
+  };
+
   return (
     <div className="p-6 max-w-[1440px]">
+      {/* Cost Alert Banner */}
+      <div className="rounded-md p-3 mb-4 flex items-center gap-3" style={{ backgroundColor: "#FEF2F2", border: "1px solid #F5A5A5" }}>
+        <AlertTriangle size={18} style={{ color: "#9B1C1C" }} />
+        <div>
+          <div className="text-[13px] font-semibold" style={{ color: "#9B1C1C" }}>Projected monthly spend exceeds budget</div>
+          <div className="text-[12px]" style={{ color: "#9B1C1C", opacity: 0.85 }}>Current projection: R 513,400 vs. budget of R 450,000 — consider enabling transaction compaction to reduce WiseTech API fees.</div>
+        </div>
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {kpis.map((kpi) => (
@@ -821,8 +953,21 @@ function WiseLayerView() {
 
         {/* RLA Monitor */}
         <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "#DDE3EA" }}>
             <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>RLA STATUS MONITOR</span>
+            <button
+              onClick={handleRunCheck}
+              disabled={rlaChecking}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-colors hover:bg-[#F1F4F8] disabled:opacity-50"
+              style={{ border: "1px solid #C8D0DA", color: "#3D5166" }}
+            >
+              <RefreshCw size={12} className={rlaChecking ? "animate-spin" : ""} />
+              {rlaChecking ? "Checking..." : "Run Check Now"}
+            </button>
+          </div>
+          <div className="px-4 py-2 flex items-center gap-1.5 text-[11px]" style={{ color: "#6B7E92", backgroundColor: "#F8FAFB" }}>
+            <Clock size={12} />
+            Last checked: {rlaLastChecked}
           </div>
           <div className="divide-y" style={{ borderColor: "#DDE3EA" }}>
             {rlaData.map((r) => (
@@ -840,6 +985,44 @@ function WiseLayerView() {
           </div>
         </div>
       </div>
+
+      {/* Transaction Compaction Table */}
+      <div className="mt-4 rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>TRANSACTION COMPACTION</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr style={{ backgroundColor: "#F1F4F8" }}>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Date</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Original TX Count</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Compacted TX Count</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Saved</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Est. Saving (USD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {compactionData.map((row, i) => (
+                <tr key={i} className="border-b hover:bg-[#F1F4F8] transition-colors" style={{ borderColor: "#DDE3EA" }}>
+                  <td className="px-4 py-2.5 font-mono text-[12px]" style={{ color: "#0D1B2A" }}>{row.date}</td>
+                  <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#3D5166" }}>{row.origTx.toLocaleString()}</td>
+                  <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#15632A" }}>{row.compactedTx.toLocaleString()}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-medium" style={{ color: "#15632A" }}>-{row.saved.toLocaleString()}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-semibold" style={{ color: "#15632A" }}>${row.estSaving.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                </tr>
+              ))}
+              <tr style={{ backgroundColor: "#F1F4F8" }}>
+                <td className="px-4 py-2.5 font-semibold" style={{ color: "#3D5166" }}>Total (7 days)</td>
+                <td className="px-4 py-2.5 text-right font-mono font-semibold" style={{ color: "#3D5166" }}>{compactionData.reduce((s, r) => s + r.origTx, 0).toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-right font-mono font-semibold" style={{ color: "#15632A" }}>{compactionData.reduce((s, r) => s + r.compactedTx, 0).toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-right font-mono font-semibold" style={{ color: "#15632A" }}>-{compactionData.reduce((s, r) => s + r.saved, 0).toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-right font-mono font-bold" style={{ color: "#15632A" }}>${compactionData.reduce((s, r) => s + r.estSaving, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -849,26 +1032,117 @@ function WiseLayerView() {
    ══════════════════════════════════════════════ */
 
 function CargoWiseView({ setView }: { setView: (v: ViewMode) => void }) {
+  const [connected, setConnected] = useState(false);
+
+  const cwExecutions = [
+    { ref: "CW-EXEC-001247", type: "Shipment Draft", status: "success" as const, duration: "2.3s", timestamp: "2026-03-04 09:38:12" },
+    { ref: "CW-EXEC-001246", type: "eAdaptor XML", status: "success" as const, duration: "4.1s", timestamp: "2026-03-04 09:15:44" },
+    { ref: "CW-EXEC-001245", type: "Shipment Draft", status: "failed" as const, duration: "1.8s", timestamp: "2026-03-04 08:52:01" },
+    { ref: "CW-EXEC-001244", type: "Invoice Sync", status: "success" as const, duration: "3.6s", timestamp: "2026-03-04 08:30:19" },
+    { ref: "CW-EXEC-001243", type: "eAdaptor XML", status: "success" as const, duration: "5.2s", timestamp: "2026-03-04 07:45:33" },
+  ];
+
   return (
     <div className="p-6 max-w-[1200px]">
-      <h1 className="text-[30px] font-semibold" style={{ color: "#0D1B2A" }}>CargoWise Integration Status</h1>
-      <p className="text-[14px] mt-1" style={{ color: "#6B7E92" }}>Monitor CargoWise connectivity and execution history.</p>
-      <div className="mt-8 flex flex-col items-center justify-center p-16 rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="w-16 h-16 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#EBF3FB" }}>
-          <Database size={32} style={{ color: "#1A4971" }} />
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-[30px] font-semibold" style={{ color: "#0D1B2A" }}>CargoWise Integration Status</h1>
+          <p className="text-[14px] mt-1" style={{ color: "#6B7E92" }}>Monitor CargoWise connectivity and execution history.</p>
         </div>
-        <h2 className="text-[18px] font-semibold mt-4" style={{ color: "#0D1B2A" }}>CargoWise Not Connected</h2>
-        <p className="text-[14px] mt-1 text-center max-w-[400px]" style={{ color: "#6B7E92" }}>
-          Configure your CargoWise server credentials in Settings to enable draft creation and eAdaptor XML integration.
-        </p>
-        <button
-          onClick={() => setView("settings")}
-          className="mt-5 px-4 py-2 rounded text-[14px] font-semibold text-white transition-colors hover:opacity-90"
-          style={{ backgroundColor: "#B8860B" }}
-        >
-          Go to Settings
-        </button>
+        {/* Demo toggle */}
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] font-medium" style={{ color: "#6B7E92" }}>Demo mode:</span>
+          <button
+            onClick={() => setConnected(!connected)}
+            className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+            style={{ backgroundColor: connected ? "#15632A" : "#C8D0DA" }}
+          >
+            <span
+              className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+              style={{ transform: connected ? "translateX(24px)" : "translateX(2px)" }}
+            />
+          </button>
+          <span className="text-[12px] font-semibold" style={{ color: connected ? "#15632A" : "#6B7E92" }}>
+            {connected ? "Connected" : "Not Connected"}
+          </span>
+        </div>
       </div>
+
+      {connected ? (
+        <div className="space-y-4">
+          {/* Connection Status Card */}
+          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CONNECTION STATUS</span>
+            </div>
+            <div className="p-4 flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="flex-1">
+                <div className="text-[14px] font-medium" style={{ color: "#0D1B2A" }}>
+                  Connected to <span className="font-mono" style={{ color: "#1A4971" }}>cw-prod.safreight.co.za</span>
+                </div>
+                <div className="text-[12px]" style={{ color: "#6B7E92" }}>
+                  Last successful sync: 2026-03-04 09:38:12 SAST
+                </div>
+              </div>
+              <Wifi size={18} className="text-emerald-600" />
+            </div>
+          </div>
+
+          {/* Recent CW Executions */}
+          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>RECENT CW EXECUTIONS</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr style={{ backgroundColor: "#F1F4F8" }}>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Ref</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Type</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Status</th>
+                    <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Duration</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cwExecutions.map((exec) => (
+                    <tr key={exec.ref} className="border-b hover:bg-[#F1F4F8] transition-colors" style={{ borderColor: "#DDE3EA" }}>
+                      <td className="px-4 py-2.5 font-mono text-[12px] font-medium" style={{ color: "#B8860B" }}>{exec.ref}</td>
+                      <td className="px-4 py-2.5" style={{ color: "#0D1B2A" }}>{exec.type}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${exec.status === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${exec.status === "success" ? "bg-emerald-500" : "bg-red-500"}`} />
+                          {exec.status === "success" ? "Success" : "Failed"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#3D5166" }}>{exec.duration}</td>
+                      <td className="px-4 py-2.5 font-mono text-[12px]" style={{ color: "#6B7E92" }}>{exec.timestamp}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-col items-center justify-center p-16 rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="w-16 h-16 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#EBF3FB" }}>
+            <Database size={32} style={{ color: "#1A4971" }} />
+          </div>
+          <h2 className="text-[18px] font-semibold mt-4" style={{ color: "#0D1B2A" }}>CargoWise Not Connected</h2>
+          <p className="text-[14px] mt-1 text-center max-w-[400px]" style={{ color: "#6B7E92" }}>
+            Configure your CargoWise server credentials in Settings to enable draft creation and eAdaptor XML integration.
+          </p>
+          <button
+            onClick={() => setView("settings")}
+            className="mt-5 px-4 py-2 rounded text-[14px] font-semibold text-white transition-colors hover:opacity-90"
+            style={{ backgroundColor: "#B8860B" }}
+          >
+            Go to Settings
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -969,6 +1243,27 @@ function SettingsView() {
 }
 
 /* ══════════════════════════════════════════════
+   Footer
+   ══════════════════════════════════════════════ */
+
+function Footer() {
+  return (
+    <footer
+      className="flex items-center justify-center flex-shrink-0"
+      style={{
+        backgroundColor: "#1A2332",
+        borderTop: "1px solid #243040",
+        height: 32,
+      }}
+    >
+      <span className="text-[11px]" style={{ color: "#6B7E92" }}>
+        CargoIQ (Pty) Ltd | Johannesburg, South Africa | POPIA Compliant | All data stored in South Africa
+      </span>
+    </footer>
+  );
+}
+
+/* ══════════════════════════════════════════════
    Main Page
    ══════════════════════════════════════════════ */
 
@@ -976,6 +1271,7 @@ export default function Home() {
   const [view, setView] = useState<ViewMode>("dashboard");
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const handleSelectShipment = (id: string) => {
     setSelectedShipmentId(id);
@@ -987,24 +1283,40 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen overflow-hidden" style={{ backgroundColor: "#F1F4F8" }}>
-      <Sidebar view={view} setView={handleSetView} collapsed={sidebarCollapsed} toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <TopNav view={view} collapsed={sidebarCollapsed} />
+    <div className="h-screen flex flex-col" style={{ backgroundColor: "#F1F4F8" }}>
+      <Sidebar
+        view={view}
+        setView={handleSetView}
+        collapsed={sidebarCollapsed}
+        toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
+      />
+      <TopNav
+        view={view}
+        collapsed={sidebarCollapsed}
+        onToggleMobileSidebar={() => setMobileSidebarOpen(true)}
+        onQuickUpload={() => setView("compliance")}
+      />
       <main
-        className="transition-all duration-200 overflow-y-auto"
+        className="flex-1 overflow-y-auto transition-all duration-200"
         style={{
           marginLeft: sidebarCollapsed ? 56 : 240,
           paddingTop: 56,
-          height: "100vh",
         }}
       >
-        {view === "dashboard" && <DashboardView setView={handleSetView} />}
-        {view === "shipments" && <ShipmentQueueView onSelectShipment={handleSelectShipment} />}
-        {view === "shipment-detail" && <ShipmentDetailView shipmentId={selectedShipmentId} setView={handleSetView} />}
-        {view === "compliance" && <ComplianceView />}
-        {view === "wiselayer" && <WiseLayerView />}
-        {view === "cargowise" && <CargoWiseView setView={handleSetView} />}
-        {view === "settings" && <SettingsView />}
+        <div className="min-h-full flex flex-col">
+          <div className="flex-1">
+            {view === "dashboard" && <DashboardView setView={handleSetView} />}
+            {view === "shipments" && <ShipmentQueueView onSelectShipment={handleSelectShipment} />}
+            {view === "shipment-detail" && <ShipmentDetailView shipmentId={selectedShipmentId} setView={handleSetView} />}
+            {view === "compliance" && <ComplianceView />}
+            {view === "wiselayer" && <WiseLayerView />}
+            {view === "cargowise" && <CargoWiseView setView={handleSetView} />}
+            {view === "settings" && <SettingsView />}
+          </div>
+          <Footer />
+        </div>
       </main>
     </div>
   );
