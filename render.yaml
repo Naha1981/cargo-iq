@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: cargoiq-api
+    runtime: node
+    plan: starter
+    buildCommand: bun install && bun run db:generate && bun run build
+    startCommand: bun run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:./db/cargoiq.db
+      - key: PORT
+        value: "3000"
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: NEXTAUTH_URL
+        fromService:
+          name: cargoiq-api
+          type: web
+          property: hostport
+    healthCheckPath: /api/health
+    autoDeploy: true

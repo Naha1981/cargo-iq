@@ -1,0 +1,26 @@
+name: Infra Keep Alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # every 10 minutes
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake CargoIQ API
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.CARGOIQ_RENDER_URL }}/api/health)
+          echo "Health check status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::warning::CargoIQ API health check returned $HTTP_STATUS"
+          fi
+
+      - name: Wake AI Worker (if deployed)
+        if: always()
+        run: |
+          if [ -n "${{ secrets.AI_WORKER_URL }}" ]; then
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.AI_WORKER_URL }}/health)
+            echo "AI Worker health check status: $HTTP_STATUS"
+          fi

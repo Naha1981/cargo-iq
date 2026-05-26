@@ -1,0 +1,7 @@
+# CargoIQ Service Endpoints for External Monitoring
+# Register these with UptimeRobot, cron-job.org, or any uptime monitor
+#
+# Format: NAME | URL | Expected Interval
+
+CargoIQ API | https://cargoiq-api.onrender.com/api/health | 5 min
+AI Worker   | https://cargoiq-worker.onrender.com/health   | 5 min

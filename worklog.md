@@ -91,3 +91,50 @@ Stage Summary:
 - Compliance Shield API fully rewritten with 3 Phase-1 modules matching PRD spec: Invoice↔PL Cross-Reference (weight tolerance ±1kg, value tolerance 0.5%, package count exact match), HS Code Validator (8-digit SARS requirement), SACU/Non-SACU VAT Engine (1.10 markup for non-SACU, 1.00 for SACU, R50 variance threshold)
 - Both APIs return proper TypeScript-typed responses with detailed validation and error handling
 - No database dependency in compliance API — works purely with submitted data per spec
+
+---
+Task ID: 2
+Agent: Infra Agent + Services Config Builder
+Task: Create service registry, self-healing infra agent, and uptime monitoring configuration
+
+Work Log:
+- Created /infra/services.json with 2 service entries: CargoIQ API (critical=true) and AI Worker (critical=false), each with 300s interval, 3 retries, 8000ms timeout
+- Created /infra/agent/monitor.ts — full self-healing infra monitoring agent (~340 lines):
+  - TypeScript with proper interfaces: ServiceConfig, ServiceStatus, ServiceStatusValue ("alive"|"degraded"|"down")
+  - checkService() function: fetches health endpoints with configurable timeout via AbortController
+  - wakeService() function: retry loop with exponential backoff (1s, 2s, 4s, 8s, 16s capped at 30s)
+  - Degraded mode: after 2+ consecutive failures → "degraded", after 5+ → "down"
+  - Auto-recovery: when degraded/down service comes back, logs RECOVERY and resets failure count
+  - Dashboard (GET /): dark-themed HTML dashboard on port 3099 with service table, stats cards, color coding (green=alive, amber=degraded, red=down), auto-refresh every 30s
+  - API endpoint (GET /api/status): JSON response with agent uptime, all service statuses, failure counts, uptime percentages, last check times, last errors
+  - Graceful shutdown: SIGINT/SIGTERM handlers that clear all check timers
+  - Reads services.json from parent directory, self-contained with no Next.js dependencies
+- Created /infra/agent/package.json: standalone bun package with dev (bun --hot monitor.ts) and start scripts
+- Created /infra/uptime/endpoints.txt: reference file listing both service endpoints for external monitoring (UptimeRobot, cron-job.org)
+- Verified monitor.ts runs successfully: both services registered, health checks execute, dashboard returns 200 HTML, /api/status returns proper JSON with full service metadata
+
+Stage Summary:
+- Infrastructure monitoring layer complete with 3 files: services.json (registry), monitor.ts (self-healing agent), package.json (standalone config)
+- Uptime configuration file (endpoints.txt) ready for external monitoring registration
+- Monitor agent fully functional: exponential backoff, degraded mode, auto-recovery, dark dashboard with color-coded statuses, JSON API, runs independently on port 3099
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Deploy CargoIQ on Render — create production deployment infrastructure
+
+Work Log:
+- Created /src/app/api/health/route.ts — lightweight health endpoint (no DB, no auth, <50ms response) returning status, service, version, timestamp, uptime
+- Created /render.yaml — Render Blueprint for cargoiq-api web service (Node runtime, starter plan, SQLite, healthCheckPath wired to /api/health, auto-deploy)
+- Created /.github/workflows/keep-alive.yml — GitHub Actions cron every 10 min pinging /api/health with warning annotations on non-200
+- Updated next.config.ts — added output: "standalone" for Docker/Render deployment, removed ignoreBuildErrors and sandbox-specific allowedDevOrigins
+- Created /infra/services.json — service registry with CargoIQ API (critical) and AI Worker entries
+- Created /infra/agent/monitor.ts — self-healing infra agent with exponential backoff, degraded mode, auto-recovery, dashboard on port 3099
+- Created /infra/agent/package.json — standalone bun package for the agent
+- Created /infra/uptime/endpoints.txt — reference file for UptimeRobot/cron-job.org registration
+- Applied CARGOiQ real logo branding: sidebar logo image, CARGO/iQ text styling, favicon, page title
+
+Stage Summary:
+- Production deployment ready: health endpoint, Render Blueprint, GitHub Actions keep-alive, standalone output mode
+- Self-healing infra agent operational on port 3099 with dashboard and JSON API
+- All services: /api/health returns 200 in <50ms, main app runs without errors, no 404s

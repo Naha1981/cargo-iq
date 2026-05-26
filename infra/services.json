@@ -1,0 +1,18 @@
+[
+  {
+    "name": "CargoIQ API",
+    "url": "https://cargoiq-api.onrender.com/api/health",
+    "interval": 300,
+    "retries": 3,
+    "timeout": 8000,
+    "critical": true
+  },
+  {
+    "name": "AI Worker",
+    "url": "https://cargoiq-worker.onrender.com/health",
+    "interval": 300,
+    "retries": 3,
+    "timeout": 8000,
+    "critical": false
+  }
+]

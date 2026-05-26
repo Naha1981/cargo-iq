@@ -1,0 +1,9 @@
+{
+  "name": "cargoiq-infra-agent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot monitor.ts",
+    "start": "bun monitor.ts"
+  }
+}
