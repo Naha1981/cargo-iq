@@ -175,12 +175,17 @@ function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobil
       {/* Logo */}
       <div className="flex items-center h-14 px-4 border-b" style={{ borderColor: "#243040" }}>
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center font-bold text-sm" style={{ backgroundColor: "#B8860B", color: "#FFF" }}>
-            CQ
-          </div>
+          <img
+            src="/cargoiq-logo.jpg"
+            alt="CargoIQ"
+            className="flex-shrink-0 rounded"
+            style={{ width: 28, height: 28, objectFit: "cover" }}
+          />
           {!collapsed && (
             <div className="flex flex-col min-w-0">
-              <span className="text-sm font-semibold text-white tracking-tight truncate">CargoIQ</span>
+              <span className="text-sm font-semibold tracking-tight truncate">
+                <span className="text-white">CARGO</span><span style={{ color: "#E6A34D" }}>iQ</span>
+              </span>
               <span className="text-[10px] leading-none" style={{ color: "#6B7E92" }}>Compliance Platform</span>
             </div>
           )}
@@ -1257,7 +1262,7 @@ function Footer() {
       }}
     >
       <span className="text-[11px]" style={{ color: "#6B7E92" }}>
-        CargoIQ (Pty) Ltd | Johannesburg, South Africa | POPIA Compliant | All data stored in South Africa
+        CARGOiQ (Pty) Ltd | Johannesburg, South Africa | POPIA Compliant | All data stored in South Africa
       </span>
     </footer>
   );

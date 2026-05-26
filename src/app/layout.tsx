@@ -14,11 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CargoIQ — AI Compliance & Cost Containment for CargoWise",
+  title: "CARGOiQ — AI Compliance & Cost Containment for CargoWise",
   description:
     "South Africa's AI compliance and cost containment platform for freight forwarders and customs brokers. Purpose-built for the WiseTech Value Pack pricing environment and SARS's 2025/2026 enforcement regime.",
   keywords: [
-    "CargoIQ",
+    "CARGOiQ",
     "CargoWise",
     "SARS",
     "compliance",
@@ -27,6 +27,14 @@ export const metadata: Metadata = {
     "South Africa",
     "WiseTech",
   ],
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon.ico", sizes: "32x32" },
+    ],
+    apple: "/cargoiq-logo.jpg",
+  },
 };
 
 export default function RootLayout({
