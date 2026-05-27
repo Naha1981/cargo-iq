@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { runComplianceShield, ComplianceModule } from "@/lib/compliance-engine";
-import { portToCountryCode, estimateZarValue } from '@/lib/api-utils';
+import { portToCountryCode, estimateZarValue, sanitizeError } from '@/lib/api-utils';
 
 export async function POST(
   _request: NextRequest,
@@ -132,7 +132,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: "internal_error",
-        message: "Failed to run compliance shield",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

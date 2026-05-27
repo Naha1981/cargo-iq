@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateReference } from "@/lib/reference-generator";
 import { runComplianceShield, ComplianceModule } from "@/lib/compliance-engine";
-import { portToCountryCode, estimateZarValue, safeJsonParse } from '@/lib/api-utils';
+import { portToCountryCode, estimateZarValue, safeJsonParse, sanitizeError } from '@/lib/api-utils';
 
 interface ExtractedLineItem {
   hsCode?: string | null;
@@ -289,7 +289,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "internal_error",
-        message: "Failed to create shipment",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

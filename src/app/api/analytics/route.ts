@@ -1,10 +1,13 @@
 // GET /api/analytics - Overview statistics with enhanced pipeline metrics
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getOrgIdFromRequest, sanitizeError } from "@/lib/api-utils";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const org = await db.organisation.findFirst();
+    const orgId = await getOrgIdFromRequest(request);
+
+    const org = await db.organisation.findUnique({ where: { id: orgId } });
     if (!org) {
       return NextResponse.json({
         processed: 0,
@@ -36,17 +39,17 @@ export async function GET() {
       rejectedCount,
       inCwCount,
     ] = await Promise.all([
-      db.shipment.count({ where: { orgId: org.id } }),
-      db.shipment.count({ where: { orgId: org.id, status: "pending" } }),
-      db.shipment.count({ where: { orgId: org.id, status: "review_required" } }),
-      db.shipment.count({ where: { orgId: org.id, status: "approved" } }),
-      db.shipment.count({ where: { orgId: org.id, status: "cw_draft_created" } }),
-      db.shipment.count({ where: { orgId: org.id, status: "error" } }),
-      db.shipment.count({ where: { orgId: org.id, shieldStatus: "pass" } }),
-      db.shipment.count({ where: { orgId: org.id, shieldStatus: "hold" } }),
-      db.shipment.count({ where: { orgId: org.id, shieldStatus: "fail" } }),
-      db.shipment.count({ where: { orgId: org.id, status: "rejected" } }),
-      db.shipment.count({ where: { orgId: org.id, status: "in_cargowise" } }),
+      db.shipment.count({ where: { orgId } }),
+      db.shipment.count({ where: { orgId, status: "pending" } }),
+      db.shipment.count({ where: { orgId, status: "review_required" } }),
+      db.shipment.count({ where: { orgId, status: "approved" } }),
+      db.shipment.count({ where: { orgId, status: "cw_draft_created" } }),
+      db.shipment.count({ where: { orgId, status: "error" } }),
+      db.shipment.count({ where: { orgId, shieldStatus: "pass" } }),
+      db.shipment.count({ where: { orgId, shieldStatus: "hold" } }),
+      db.shipment.count({ where: { orgId, shieldStatus: "fail" } }),
+      db.shipment.count({ where: { orgId, status: "rejected" } }),
+      db.shipment.count({ where: { orgId, status: "in_cargowise" } }),
     ]);
 
     const processed = approved + cwDraft;
@@ -66,7 +69,7 @@ export async function GET() {
 
       const count = await db.shipment.count({
         where: {
-          orgId: org.id,
+          orgId,
           createdAt: { gte: new Date(dateStr), lt: new Date(nextDateStr) },
         },
       });
@@ -76,7 +79,7 @@ export async function GET() {
 
     // ── Top origin ports ────────────────────────────────────────────────────
     const allShipments = await db.shipment.findMany({
-      where: { orgId: org.id, originPort: { not: null } },
+      where: { orgId, originPort: { not: null } },
       select: { originPort: true },
     });
 
@@ -97,7 +100,7 @@ export async function GET() {
 
     for (const source of sourceTypes) {
       const sourceShipments = await db.shipment.findMany({
-        where: { orgId: org.id, source },
+        where: { orgId, source },
         select: { overallConfidence: true },
       });
 
@@ -151,7 +154,7 @@ export async function GET() {
   } catch (error) {
     console.error("Error getting analytics:", error);
     return NextResponse.json(
-      { error: "internal_error", message: "Failed to get analytics" },
+      { error: "internal_error", message: sanitizeError(error) },
       { status: 500 }
     );
   }

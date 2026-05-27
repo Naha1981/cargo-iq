@@ -11,7 +11,7 @@ import { generateReference } from "@/lib/reference-generator";
 import { runComplianceShield } from "@/lib/compliance-engine";
 import type { DocumentType, ExtractionResult } from "@/lib/prompts";
 import { notify } from "@/lib/notify";
-import { portToCountryCode, estimateZarValue } from '@/lib/api-utils';
+import { portToCountryCode, estimateZarValue, sanitizeError } from '@/lib/api-utils';
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[API] Error:", error);
     return NextResponse.json(
-      { error: "internal_error", message: "Failed to process inbound email" },
+      { error: "internal_error", message: sanitizeError(error) },
       { status: 500 }
     );
   }

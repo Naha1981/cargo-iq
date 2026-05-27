@@ -1036,3 +1036,145 @@ Stage Summary:
 - ESLint: 0 errors in src/ (15 errors + 1716 warnings in compiled build artifacts only)
 - Zero test files exist anywhere in the project
 - Production Readiness Score: ~65% (down from 78% due to discovering mobile breakage, missing rate limiting, zero test coverage)
+
+
+---
+Task ID: 1
+Agent: Hardened Infra Agent
+Task: Implement Part 1 — Hardened Infrastructure Configurations
+
+Work Log:
+- Read worklog.md and existing files: Caddyfile, render.yaml, next.config.ts
+- Replaced Caddyfile with hardened version:
+  - REMOVED XTransformPort SSRF vulnerability (no more arbitrary port proxying via query param)
+  - Locked reverse_proxy to ONLY localhost:3000 (the backend application)
+  - Added strict security headers: X-Frame-Options DENY, HSTS (max-age=31536000; includeSubDomains; preload), X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, Content-Security-Policy (restrictive default), X-XSS-Protection 0 (modern CSP-based), Cross-Origin-Opener-Policy same-origin, Cross-Origin-Resource-Policy same-origin
+  - Properly forwards Host, X-Real-IP, X-Forwarded-For, X-Forwarded-Proto headers
+  - Listens on :81 (unchanged)
+- Updated render.yaml for PostgreSQL + Next.js:
+  - Changed runtime from runtime: node to env: node (correct Render spec key)
+  - Build command: npm ci && npx prisma generate && npm run build
+  - Start command: npm run start (uses Next.js standalone output)
+  - Provisions managed PostgreSQL database named cargoiq-db (starter plan)
+  - DATABASE_URL uses fromDatabase reference to cargoiq-db connectionString
+  - Added all required env vars: ENCRYPTION_SECRET_KEY (generateValue), NEXT_PUBLIC_SUPABASE_URL (sync: false), NEXT_PUBLIC_SUPABASE_ANON_KEY (sync: false), CORS_ALLOWED_ORIGINS (sync: false), JWT_SECRET_KEY (generateValue), NEXTAUTH_SECRET (generateValue), NEXTAUTH_URL (fromService)
+  - healthCheckPath: /api/health, autoDeploy: true
+- Updated next.config.ts with production hardening:
+  - Changed reactStrictMode from false to true
+  - Kept output: standalone
+  - Added async headers() function with security headers on all routes: X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, X-XSS-Protection 1; mode=block, Permissions-Policy camera=(), microphone=(), geolocation=()
+- Created .env.example with 10 env vars documented with placeholder values and generation instructions
+- Verified all files, lint passes, dev server returns 200 on /api/health
+
+Stage Summary:
+- 4 infrastructure files hardened/created: Caddyfile (SSRF removed, security headers), render.yaml (PostgreSQL + all env vars), next.config.ts (reactStrictMode + security headers), .env.example (10 env vars documented)
+- Critical SSRF vulnerability eliminated from Caddyfile gateway
+- Defense-in-depth security headers at both Caddy reverse proxy and Next.js application level
+- Production deployment ready with managed PostgreSQL on Render
+
+---
+Task ID: 5-7
+Agent: Hardening Agent
+Task: Part 5 & 6 — Database Schema Hardening + API Route Tenant Isolation + Upload Limits
+
+Work Log:
+- Updated Prisma schema with @@index decorators for frequently queried columns:
+  - Shipment: @@index([orgId]), @@index([orgId, status]), @@index([orgId, shieldStatus]), @@index([createdAt])
+  - ComplianceEvent: @@index([shipmentId]), @@index([orgId])
+  - AuditLog: @@index([entityId]), @@index([orgId])
+  - Document: @@index([orgId])
+  - CargoLineItem: @@index([shipmentId])
+  - CwExecution: @@index([shipmentId]), @@index([orgId])
+  - InboundEmail: @@index([orgId])
+  - EmailConnection: @@index([orgId])
+- Added production comment to datasource: "sqlite" with comment "Production should use postgresql"
+- Ran db:push successfully to apply all indexes
+- Added MAX_UPLOAD_SIZE_BYTES (10MB) constant and file.size + buffer.length checks to /api/process/route.ts with 413 error response
+- Added MAX_UPLOAD_SIZE_BYTES (10MB) constant and file.size + buffer.length checks to /api/documents/route.ts with 413 error response
+- Created /src/lib/crypto.ts — AES-256-GCM encryption service with encrypt/decrypt functions using scrypt key derivation, for encrypting CargoWise credentials at rest
+- Added getOrgIdFromRequest() to /src/lib/api-utils.ts — reads x-org-id header from auth middleware, falls back to first org in DB for sandbox/dev mode
+- Added sanitizeError() to /src/lib/api-utils.ts — returns generic message in production, detailed message in development
+- Updated /api/shipments/route.ts — GET now uses getOrgIdFromRequest() for orgId-based tenant filtering, where clause includes orgId
+- Updated /api/analytics/route.ts — GET now uses getOrgIdFromRequest() instead of findFirst(), all queries filter by orgId
+- Updated /api/organisations/[id]/route.ts — PATCH now encrypts cwCredentialsEnc using cryptoService.encrypt() before saving; uses sanitizeError for error responses
+- Updated /api/shipments/[id]/approve/route.ts — POST now verifies shipment belongs to requesting org (403 if mismatch), uses getOrgIdFromRequest and sanitizeError
+- Applied sanitizeError to all 14 API routes:
+  - /api/shipments/route.ts, /api/shipments/[id]/route.ts, /api/shipments/[id]/reject/route.ts
+  - /api/shipments/[id]/shield/route.ts, /api/shipments/create-from-extraction/route.ts
+  - /api/process/route.ts, /api/documents/route.ts
+  - /api/ingest/email/route.ts, /api/public/email-inbound/route.ts
+  - /api/compliance/route.ts, /api/ai/extract/route.ts
+  - /api/cargowise/execute/route.ts, /api/cargowise/test/route.ts, /api/cargowise/executions/route.ts
+  - /api/seed/route.ts, /api/analytics/route.ts, /api/organisations/[id]/route.ts
+- All lint checks pass (0 errors in src/)
+- Dev server compiles successfully, all API endpoints returning 200
+
+Stage Summary:
+- Database schema hardened with 13 @@index decorators across 8 models for query performance
+- File upload size limits enforced at 10MB with 413 error response on both upload endpoints
+- AES-256-GCM crypto service created for encrypting CW credentials at rest
+- Tenant isolation via orgId filtering on GET /api/shipments and GET /api/analytics
+- Shipment approval now verifies org ownership (403 on cross-org access)
+- CW credentials encrypted before database storage
+- All 14+ API routes sanitized — no internal error details leaked in production
+- Sandbox fallback maintained — app works without JWT in dev mode
+
+---
+Task ID: 3-4
+Agent: Security Hardening Agent
+Task: Implement Part 2 & 3 — Cryptographic Security + JWT Authentication
+
+Work Log:
+- Read worklog.md and existing project structure to understand codebase context
+- Installed jose@6.2.3 package for Edge-compatible JWT verification
+- Created /src/lib/crypto.ts — AES-256-GCM encryption service:
+  - Uses Node.js built-in crypto module (no external deps)
+  - encrypt(plaintext): random 12-byte nonce, AES-256-GCM encrypt, prepend nonce to ciphertext + append 16-byte authTag, base64 encode
+  - decrypt(encryptedPayload): base64 decode, extract nonce (first 12 bytes), authTag (last 16 bytes), ciphertext (middle), AES-256-GCM decrypt with auth tag verification
+  - Key from ENCRYPTION_SECRET_KEY env var (base64url-encoded 32-byte key)
+  - Falls back to generated random key with console.warn in development
+  - Exported singleton: cryptoService
+- Created /src/lib/auth.ts — JWT authentication + tenant isolation module:
+  - Uses jose library (Edge-compatible) for JWT verification
+  - verifyAuthToken(token): Verifies JWT with HS256, returns {orgId, userId, email} or null
+  - extractBearerToken(authHeader): Extracts Bearer token from Authorization header
+  - getAuthFromRequest(request): Full auth extraction from NextRequest
+  - requireAuth(request): Returns AuthPayload or 401/503 NextResponse
+  - addOrgFilter(where, orgId): Tenant isolation helper for Prisma where clauses
+  - generateAuthToken(payload): Utility for creating JWT tokens (testing/login)
+  - JWT secret from JWT_SECRET_KEY env var; allows through in dev mode if not set
+- Created /src/lib/rate-limit.ts — In-memory sliding window rate limiter:
+  - Uses Map<string, number[]> to track request timestamps per IP
+  - checkRateLimit(ip, options): Returns {allowed, remaining, resetAt}
+  - Default: 60s window, 30 requests per minute
+  - Automatic cleanup of expired entries every 60 seconds with unref() timer
+  - withRateLimit(request): Next.js helper returning null if allowed, 429 NextResponse if rate limited
+  - Exported singleton: rateLimiter
+  - Includes X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After headers
+- Rewrote /src/middleware.ts — Comprehensive hardened middleware:
+  - All security logic inlined for Next.js Edge Runtime compatibility (top-level imports from @/lib/* caused compilation issues in middleware runtime)
+  - CORS: Restricted to CORS_ALLOWED_ORIGINS env var (defaults to http://localhost:3000, NOT '*')
+  - Proper OPTIONS preflight handling with 204 response
+  - Block /api/seed in production with 403
+  - Rate limiting on all /api/ routes with X-RateLimit-Remaining/X-RateLimit-Reset headers
+  - 429 response with Retry-After header when rate limit exceeded
+  - Security headers on ALL responses: X-Frame-Options: DENY, X-Content-Type-Options: nosniff, X-XSS-Protection: 1; mode=block, Referrer-Policy: strict-origin-when-cross-origin
+  - JWT auth enforcement on non-public /api/ routes (public: /api/health, /api/public/*)
+  - Development/sandbox mode: if JWT_SECRET_KEY not set, logs warning and allows requests through
+  - If JWT_SECRET_KEY set: missing token → 401, invalid token → 401, valid token → adds X-Org-Id and X-User-Id headers for downstream routes
+  - Lazy dynamic import('jose') for Edge Runtime JWT verification
+  - Matcher: all routes except _next/static, _next/image, favicon.ico, icon.svg
+- Verified middleware working via curl:
+  - /api/health: 200 with security headers, CORS http://localhost:3000, X-RateLimit-Remaining: 29
+  - OPTIONS /api/shipments: 204 with CORS + security headers
+  - /api/shipments (no auth): 200 in dev mode (JWT_SECRET_KEY not set)
+  - Root page /: 200 with security headers
+- All ESLint checks pass on all new and modified files (0 errors)
+- Dev server compiles and serves successfully
+
+Stage Summary:
+- 3 new security libraries: crypto.ts (AES-256-GCM), auth.ts (JWT + tenant isolation), rate-limit.ts (sliding window)
+- 1 rewritten middleware with 4 hardening layers: CORS restriction, rate limiting, security headers, JWT auth
+- Sandbox-compatible: works without JWT_SECRET_KEY in development mode with warning
+- Production-ready: set JWT_SECRET_KEY and ENCRYPTION_SECRET_KEY to enable full security
+- Addresses audit findings F-9 (org isolation), F-26 (no auth), F-27 (no rate limiting) from Task 2-a

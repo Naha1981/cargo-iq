@@ -2,6 +2,8 @@
 // PATCH /api/organisations/[id] - Update organisation
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { cryptoService } from "@/lib/crypto";
+import { sanitizeError } from "@/lib/api-utils";
 
 export async function GET(
   _request: NextRequest,
@@ -26,7 +28,7 @@ export async function GET(
     return NextResponse.json({ organisation: org });
   } catch (error) {
     console.error("Error getting organisation:", error);
-    return NextResponse.json({ error: "internal_error", message: "Failed to get organisation" }, { status: 500 });
+    return NextResponse.json({ error: "internal_error", message: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -49,6 +51,11 @@ export async function PATCH(
       if (body[field] !== undefined) updates[field] = body[field];
     }
 
+    // Encrypt CW credentials before saving
+    if (updates.cwCredentialsEnc && typeof updates.cwCredentialsEnc === "string") {
+      updates.cwCredentialsEnc = cryptoService.encrypt(updates.cwCredentialsEnc);
+    }
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: "bad_request", message: "No valid fields to update" }, { status: 400 });
     }
@@ -58,6 +65,6 @@ export async function PATCH(
     return NextResponse.json({ organisation: org });
   } catch (error) {
     console.error("Error updating organisation:", error);
-    return NextResponse.json({ error: "internal_error", message: "Failed to update organisation" }, { status: 500 });
+    return NextResponse.json({ error: "internal_error", message: sanitizeError(error) }, { status: 500 });
   }
 }

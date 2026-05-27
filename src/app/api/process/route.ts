@@ -8,7 +8,9 @@ import { extractFromDocument } from "@/lib/ai-extraction";
 import { generateReference } from "@/lib/reference-generator";
 import { runComplianceShield, ComplianceModule } from "@/lib/compliance-engine";
 import type { ExtractionResult, DocumentType } from "@/lib/prompts";
-import { portToCountryCode, estimateZarValue, safeJsonParse } from '@/lib/api-utils';
+import { portToCountryCode, estimateZarValue, safeJsonParse, sanitizeError } from '@/lib/api-utils';
+
+const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
 // ─── POST handler ────────────────────────────────────────────────────────────
 
@@ -24,6 +26,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "bad_request", message: "No file provided" },
         { status: 400 }
+      );
+    }
+
+    // Enforce file upload size limit
+    if (file.size && file.size > MAX_UPLOAD_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: "payload_too_large", message: `File size exceeds ${MAX_UPLOAD_SIZE_BYTES / 1024 / 1024}MB limit` },
+        { status: 413 }
       );
     }
 
@@ -51,6 +61,15 @@ export async function POST(request: NextRequest) {
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // Check actual buffer size after reading
+    if (buffer.length > MAX_UPLOAD_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: "payload_too_large", message: `File size exceeds ${MAX_UPLOAD_SIZE_BYTES / 1024 / 1024}MB limit` },
+        { status: 413 }
+      );
+    }
+
     const uploadDir = path.join(process.cwd(), "uploads");
     await mkdir(uploadDir, { recursive: true });
     const fileName = `${Date.now()}-${file.name}`;
@@ -408,7 +427,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "internal_error",
-        message: "Failed to process document",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

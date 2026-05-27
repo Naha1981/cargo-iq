@@ -1,6 +1,7 @@
 // POST /api/seed - Seed the database with comprehensive demo data
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sanitizeError } from "@/lib/api-utils";
 
 export async function POST() {
   try {
@@ -369,7 +370,7 @@ export async function POST() {
   } catch (error) {
     console.error("[API] Error:", error);
     return NextResponse.json(
-      { error: "internal_error", message: "Failed to seed database" },
+      { error: "internal_error", message: sanitizeError(error) },
       { status: 500 }
     );
   }

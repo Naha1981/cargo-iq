@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sanitizeError } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Internal server error",
-        message: "Failed to list executions",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

@@ -1,6 +1,7 @@
 // POST /api/shipments/[id]/approve - Approve a shipment for CargoWise
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getOrgIdFromRequest, sanitizeError } from "@/lib/api-utils";
 
 export async function POST(
   request: NextRequest,
@@ -8,6 +9,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    const orgId = await getOrgIdFromRequest(request);
     const body = await request.json();
 
     const shipment = await db.shipment.findUnique({ where: { id } });
@@ -15,6 +17,14 @@ export async function POST(
       return NextResponse.json(
         { error: "not_found", message: "Shipment not found" },
         { status: 404 }
+      );
+    }
+
+    // Verify shipment belongs to the requesting org
+    if (shipment.orgId !== orgId) {
+      return NextResponse.json(
+        { error: "forbidden", message: "Shipment does not belong to your organisation" },
+        { status: 403 }
       );
     }
 
@@ -52,6 +62,6 @@ export async function POST(
     return NextResponse.json({ status: "approved", executionQueued: true });
   } catch (error) {
     console.error("Error approving shipment:", error);
-    return NextResponse.json({ error: "internal_error", message: "Failed to approve" }, { status: 500 });
+    return NextResponse.json({ error: "internal_error", message: sanitizeError(error) }, { status: 500 });
   }
 }

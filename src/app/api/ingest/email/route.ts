@@ -8,7 +8,7 @@ import { extractFromDocument } from "@/lib/ai-extraction";
 import { generateReference } from "@/lib/reference-generator";
 import { runComplianceShield, ComplianceModule } from "@/lib/compliance-engine";
 import type { DocumentType, ExtractionResult } from "@/lib/prompts";
-import { portToCountryCode, estimateZarValue } from '@/lib/api-utils';
+import { portToCountryCode, estimateZarValue, sanitizeError } from '@/lib/api-utils';
 
 interface EmailAttachment {
   filename: string;
@@ -410,7 +410,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "internal_error",
-        message: "Failed to ingest email",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

@@ -6,6 +6,7 @@ import {
   runComplianceShield,
   type ComplianceCheckParams,
 } from "@/lib/compliance-engine";
+import { sanitizeError } from "@/lib/api-utils";
 
 // ─── POST handler ────────────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "internal_error",
-        message: "Failed to run compliance audit",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

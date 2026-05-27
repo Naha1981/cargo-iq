@@ -9,6 +9,7 @@ import {
   type ExtractionResult,
   type DocumentType,
 } from "@/lib/prompts";
+import { sanitizeError } from "@/lib/api-utils";
 
 // ─── Helper: determine if file is an image ───────────────────────────────────
 
@@ -237,7 +238,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: "internal_error",
-        message: "Failed to extract document data",
+        message: sanitizeError(error),
         extracted: defaultExtraction(),
       },
       { status: 500 }

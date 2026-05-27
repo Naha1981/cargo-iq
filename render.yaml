@@ -1,17 +1,29 @@
 services:
   - type: web
     name: cargoiq-api
-    runtime: node
+    env: node
     plan: starter
-    buildCommand: bun install && bun run db:generate && bun run build
-    startCommand: bun run start
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        value: file:./db/cargoiq.db
-      - key: PORT
-        value: "3000"
+        fromDatabase:
+          name: cargoiq-db
+          property: connectionString
+      - key: ENCRYPTION_SECRET_KEY
+        generateValue: true
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
       - key: NEXTAUTH_SECRET
         generateValue: true
       - key: NEXTAUTH_URL
@@ -19,5 +31,7 @@ services:
           name: cargoiq-api
           type: web
           property: hostport
-    healthCheckPath: /api/health
-    autoDeploy: true
+
+databases:
+  - name: cargoiq-db
+    plan: starter

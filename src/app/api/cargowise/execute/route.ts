@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { generateShipmentXml } from "@/lib/cargowise-xml";
 import { createCwDraftViaPlaywright } from "@/lib/cargowise-playwright";
 import { notifyCw } from "@/lib/notify";
+import { sanitizeError } from "@/lib/api-utils";
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -265,7 +266,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Internal server error",
-        message: "Failed to execute CargoWise operation",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );
