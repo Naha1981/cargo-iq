@@ -1,5 +1,5 @@
 // CargoIQ — Mock data for demo purposes
-import type { ShipmentSummary, ShipmentDetail, OverviewStats, ShieldModule, CargoLineItem, RlaStatus } from "./types";
+import type { ShipmentSummary, ShipmentDetail, OverviewStats, ShieldModule, CargoLineItem, RlaStatus, IngestSource, WebwrightExecution, XmlCompactorStats } from "./types";
 
 export const mockOverviewStats: OverviewStats = {
   processed: 847,
@@ -11,49 +11,68 @@ export const mockOverviewStats: OverviewStats = {
   exceptions: 112,
 };
 
+const sourceRotation: IngestSource[] = ["email", "whatsapp", "upload"];
+
+function getSource(idx: number): IngestSource {
+  return sourceRotation[idx % 3];
+}
+
+function getConfidencePercent(conf: "high" | "medium" | "low" | null): number {
+  if (conf === "high") return 85 + Math.floor(Math.random() * 11); // 85-95
+  if (conf === "medium") return 65 + Math.floor(Math.random() * 16); // 65-80
+  if (conf === "low") return 40 + Math.floor(Math.random() * 20); // 40-59
+  return 50;
+}
+
 const coreShipments: ShipmentSummary[] = [
   {
     id: "1",
-    reference: "CIQ-2026-00047",
+    reference: "SAD500-8472910-ZA",
     shipperName: "Shanghai Global Trading Co.",
-    consigneeName: "ABC Logistics SA",
+    consigneeName: "Calthol CC",
     originPort: "CNSHA",
     destinationPort: "ZADUR",
     shipmentType: "fcl_import",
     awbOrBlNumber: "MAEU123456789",
     overallConfidence: "high",
+    confidencePercent: 96,
     shieldStatus: "pass",
-    status: "cw_draft_created",
+    status: "review_required",
+    source: "email",
     documentCount: 3,
     createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
   },
   {
     id: "2",
-    reference: "CIQ-2026-00046",
+    reference: "SAD500-2938402-ZA",
     shipperName: "Dubai Freight Services LLC",
-    consigneeName: "Santova Logistics",
+    consigneeName: "Saco CFR",
     originPort: "AEDXB",
     destinationPort: "ZACPT",
     shipmentType: "air_import",
     awbOrBlNumber: "074-12345678",
-    overallConfidence: "high",
-    shieldStatus: "pass",
-    status: "approved",
+    overallConfidence: "medium",
+    confidencePercent: 84,
+    shieldStatus: "hold",
+    status: "review_required",
+    source: "whatsapp",
     documentCount: 2,
     createdAt: new Date(Date.now() - 3.5 * 3600000).toISOString(),
   },
   {
     id: "3",
-    reference: "CIQ-2026-00045",
-    shipperName: "Kuehne + Nagel Shenzhen",
-    consigneeName: "Megafreight Services",
-    originPort: "CNSZX",
+    reference: "AWB-8271049-ZA",
+    shipperName: "German Parts GmbH",
+    consigneeName: "Small Forward (Pty) Ltd",
+    originPort: "DEHAM",
     destinationPort: "ZADUR",
-    shipmentType: "lcl_import",
-    awbOrBlNumber: "COSCO987654321",
-    overallConfidence: "medium",
-    shieldStatus: "hold",
+    shipmentType: "air_import",
+    awbOrBlNumber: "HLCU456789123",
+    overallConfidence: "high",
+    confidencePercent: 92,
+    shieldStatus: "pass",
     status: "review_required",
+    source: "email",
     documentCount: 2,
     createdAt: new Date(Date.now() - 5 * 3600000).toISOString(),
   },
@@ -67,8 +86,10 @@ const coreShipments: ShipmentSummary[] = [
     shipmentType: "fcl_import",
     awbOrBlNumber: "MSCIM987654321",
     overallConfidence: "low",
+    confidencePercent: 52,
     shieldStatus: "fail",
     status: "review_required",
+    source: "upload",
     documentCount: 1,
     createdAt: new Date(Date.now() - 6 * 3600000).toISOString(),
   },
@@ -82,8 +103,10 @@ const coreShipments: ShipmentSummary[] = [
     shipmentType: "air_import",
     awbOrBlNumber: "057-98765432",
     overallConfidence: "high",
+    confidencePercent: 91,
     shieldStatus: "pass",
     status: "pending",
+    source: "email",
     documentCount: 3,
     createdAt: new Date(Date.now() - 8 * 3600000).toISOString(),
   },
@@ -97,8 +120,10 @@ const coreShipments: ShipmentSummary[] = [
     shipmentType: "fcl_import",
     awbOrBlNumber: "HLCU456789123",
     overallConfidence: "medium",
+    confidencePercent: 78,
     shieldStatus: "hold",
     status: "review_required",
+    source: "whatsapp",
     documentCount: 2,
     createdAt: new Date(Date.now() - 10 * 3600000).toISOString(),
   },
@@ -112,8 +137,10 @@ const coreShipments: ShipmentSummary[] = [
     shipmentType: "fcl_import",
     awbOrBlNumber: "CSAV789123456",
     overallConfidence: "high",
+    confidencePercent: 94,
     shieldStatus: "pass",
     status: "cw_draft_created",
+    source: "email",
     documentCount: 4,
     createdAt: new Date(Date.now() - 12 * 3600000).toISOString(),
   },
@@ -127,8 +154,10 @@ const coreShipments: ShipmentSummary[] = [
     shipmentType: "air_import",
     awbOrBlNumber: "618-12345675",
     overallConfidence: "high",
+    confidencePercent: 89,
     shieldStatus: "pass",
     status: "approved",
+    source: "upload",
     documentCount: 2,
     createdAt: new Date(Date.now() - 14 * 3600000).toISOString(),
   },
@@ -142,8 +171,10 @@ const coreShipments: ShipmentSummary[] = [
     shipmentType: "fcl_import",
     awbOrBlNumber: "MSCM987123456",
     overallConfidence: "medium",
+    confidencePercent: 74,
     shieldStatus: "hold",
     status: "pending",
+    source: "whatsapp",
     documentCount: 1,
     createdAt: new Date(Date.now() - 18 * 3600000).toISOString(),
   },
@@ -157,8 +188,10 @@ const coreShipments: ShipmentSummary[] = [
     shipmentType: "fcl_import",
     awbOrBlNumber: "ANL456789123",
     overallConfidence: "low",
+    confidencePercent: 48,
     shieldStatus: "fail",
     status: "error",
+    source: "upload",
     documentCount: 2,
     createdAt: new Date(Date.now() - 24 * 3600000).toISOString(),
   },
@@ -207,8 +240,10 @@ const extendedShipments: ShipmentSummary[] = extendedShipmentDefs.map((d, i) => 
   shipmentType: d.type,
   awbOrBlNumber: d.bl,
   overallConfidence: d.confidence,
+  confidencePercent: getConfidencePercent(d.confidence),
   shieldStatus: d.shield,
   status: d.status,
+  source: getSource(i),
   documentCount: d.docs,
   createdAt: new Date(Date.now() - d.hoursAgo * 3600000).toISOString(),
 }));
@@ -249,15 +284,15 @@ const mockShieldModules: ShieldModule[] = [
 const mockShieldModulesHold: ShieldModule[] = [
   {
     module: "invoice_pl",
-    result: "pass",
-    detail: { checked: true },
+    result: "hold",
+    detail: { message: "Invoice gross weight does not match Packing List weight", invoiceWeight: 14520, plWeight: 14200, variance: 320 },
     penaltyRisk: false,
-    resolution: null,
+    resolution: "Reconcile invoice and packing list weight values.",
   },
   {
     module: "hs_code",
     result: "hold",
-    detail: { message: "No HS code provided" },
+    detail: { message: "No HS code provided for line item 3" },
     penaltyRisk: false,
     resolution: "Add HS code before customs submission.",
   },
@@ -331,16 +366,16 @@ export function getMockShipmentDetail(id: string): ShipmentDetail {
     ...shipment,
     shipperAddress: "Room 2801, International Trade Centre, Shanghai 200001, China",
     consigneeAddress: "15 Quarry Road, Springfield, Durban 4001, South Africa",
-    notifyParty: "ABC Logistics SA — Customs Division",
+    notifyParty: "Calthol CC — Customs Division",
     cargoDescription: "Electronic equipment including laptop computers, network routers, power supply units and cable assemblies. CIF Durban.",
     hsCodePrimary: "8471300000",
-    grossWeight: 4540,
-    netWeight: 4200,
+    grossWeight: 14520,
+    netWeight: 13800,
     weightUnit: "KGS",
     numberOfPackages: 45,
     incoterms: "CIF",
     invoiceNumber: "SINV-2026-04287",
-    invoiceValue: 586000,
+    invoiceValue: 85200,
     currency: "USD",
     vesselOrFlight: "MSC ISABELLA",
     eta: "2026-06-15",
@@ -369,20 +404,55 @@ export function getMockShipmentDetail(id: string): ShipmentDetail {
       resolutionNote: null,
       createdAt: shipment.createdAt,
     })),
+    fieldConfidence: {
+      shipperName: "high",
+      consigneeName: "high",
+      grossWeight: overall === "hold" ? "medium" : "high",
+      invoiceValue: overall === "fail" ? "low" : "high",
+      hsCodePrimary: overall === "hold" ? "medium" : "high",
+    },
   };
 }
 
 export const mockRlaStatuses: RlaStatus[] = [
-  { id: "r1", importerCode: "50123456789", importerName: "ABC Logistics SA", rlaStatus: "active", lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false },
-  { id: "r2", importerCode: "50987654321", importerName: "XYZ Imports (Pty) Ltd", rlaStatus: "active", lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false },
-  { id: "r3", importerCode: "50456789012", importerName: "DEF Trading CC", rlaStatus: "suspended", lastCheckedAt: new Date().toISOString(), suspendedSince: new Date(Date.now() - 3 * 86400000).toISOString(), alertSent: true },
-  { id: "r4", importerCode: "50321654987", importerName: "GHI Exports International", rlaStatus: "active", lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false },
-  { id: "r5", importerCode: "50789456123", importerName: "JKL Freight Solutions", rlaStatus: "inactive", lastCheckedAt: new Date(Date.now() - 7 * 86400000).toISOString(), suspendedSince: null, alertSent: false },
+  { id: "r1", importerCode: "50123456789", importerName: "Calthol CC", rlaStatus: "active", lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false },
+  { id: "r2", importerCode: "50987654321", importerName: "Saco CFR", rlaStatus: "active", lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false },
+  { id: "r3", importerCode: "50456789012", importerName: "Small Forward (Pty) Ltd", rlaStatus: "suspended", lastCheckedAt: new Date().toISOString(), suspendedSince: new Date(Date.now() - 3 * 86400000).toISOString(), alertSent: true },
+  { id: "r4", importerCode: "50321654987", importerName: "ABC Logistics SA", rlaStatus: "active", lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false },
+  { id: "r5", importerCode: "50789456123", importerName: "DEF Trading CC", rlaStatus: "inactive", lastCheckedAt: new Date(Date.now() - 7 * 86400000).toISOString(), suspendedSince: null, alertSent: false },
+  { id: "r6", importerCode: "50654321987", importerName: "Megafreight Services", rlaStatus: "active", lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false },
+  { id: "r7", importerCode: "50876543210", importerName: "NATCO Logistics", rlaStatus: "active", lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false },
 ];
 
-export const mockTransactionData = Array.from({ length: 30 }, (_, i) => {
-  const date = new Date(Date.now() - (29 - i) * 86400000);
-  const total = 80 + Math.floor(Math.random() * 60);
-  const saved = Math.floor(total * (0.5 + Math.random() * 0.25));
-  return { date: date.toISOString().split("T")[0], total, saved };
-});
+export const mockXmlCompactorStats: XmlCompactorStats = {
+  projectedTxCount: 1482,
+  compactedSavingsPercent: 62,
+  monthlySavingsZAR: 27417,
+  ytdSavingsZAR: 284100,
+  transactionData: Array.from({ length: 30 }, (_, i) => {
+    const date = new Date(Date.now() - (29 - i) * 86400000);
+    const total = 80 + Math.floor(Math.random() * 60);
+    const saved = Math.floor(total * (0.5 + Math.random() * 0.25));
+    return { date: date.toISOString().split("T")[0], total, saved };
+  }),
+};
+
+export const mockWebwrightExecutions: WebwrightExecution[] = [
+  {
+    id: "we1",
+    prompt: "Log into Durban Port Authority, check container MSCU1234567, get position.",
+    targetUrl: "https://transnet.portauthority.co.za",
+    status: "success",
+    output: [
+      "[system] Spawning isolated Webwright sandbox...",
+      "[webwright] Launching Chromium headless...",
+      "[webwright] Navigating to transnet.portauthority.co.za...",
+      "[webwright] Entering credentials for Durban Port Portal...",
+      "[webwright] Searching for container MSCU1234567...",
+      "[webwright] Status: SUCCESS",
+      "[stdout] Container MSCU1234567 is located in STACK_B, Row 4.",
+    ],
+    startedAt: new Date(Date.now() - 300000).toISOString(),
+    completedAt: new Date(Date.now() - 240000).toISOString(),
+  },
+];

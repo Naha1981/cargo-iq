@@ -2,107 +2,14 @@
 // Uses z-ai-web-dev-sdk for AI-powered extraction (VLM for images, LLM for text/PDF)
 import { NextRequest, NextResponse } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface FieldExtraction {
-  value: string | number | null;
-  confidence: "high" | "medium" | "low";
-}
-
-interface ExtractionResult {
-  shipper_name: FieldExtraction;
-  shipper_address: FieldExtraction;
-  consignee_name: FieldExtraction;
-  consignee_address: FieldExtraction;
-  origin_port: FieldExtraction;
-  destination_port: FieldExtraction;
-  cargo_description: FieldExtraction;
-  hs_code_primary: FieldExtraction;
-  gross_weight: FieldExtraction;
-  net_weight: FieldExtraction;
-  weight_unit: FieldExtraction;
-  number_of_packages: FieldExtraction;
-  incoterms: FieldExtraction;
-  invoice_number: FieldExtraction;
-  invoice_value: FieldExtraction;
-  currency: FieldExtraction;
-  awb_or_bl_number: FieldExtraction;
-  overall_confidence: "high" | "medium" | "low";
-  extraction_notes: string;
-}
-
-type DocumentType =
-  | "commercial_invoice"
-  | "packing_list"
-  | "bill_of_lading"
-  | "airway_bill"
-  | "customs_declaration"
-  | "other";
-
-// ─── Default empty extraction result ─────────────────────────────────────────
-
-function defaultExtraction(): ExtractionResult {
-  return {
-    shipper_name: { value: null, confidence: "low" },
-    shipper_address: { value: null, confidence: "low" },
-    consignee_name: { value: null, confidence: "low" },
-    consignee_address: { value: null, confidence: "low" },
-    origin_port: { value: null, confidence: "low" },
-    destination_port: { value: null, confidence: "low" },
-    cargo_description: { value: null, confidence: "low" },
-    hs_code_primary: { value: null, confidence: "low" },
-    gross_weight: { value: null, confidence: "low" },
-    net_weight: { value: null, confidence: "low" },
-    weight_unit: { value: "KGS", confidence: "high" },
-    number_of_packages: { value: null, confidence: "low" },
-    incoterms: { value: null, confidence: "low" },
-    invoice_number: { value: null, confidence: "low" },
-    invoice_value: { value: null, confidence: "low" },
-    currency: { value: "USD", confidence: "medium" },
-    awb_or_bl_number: { value: null, confidence: "low" },
-    overall_confidence: "low",
-    extraction_notes: "",
-  };
-}
-
-// ─── System prompt for extraction ────────────────────────────────────────────
-
-const EXTRACTION_SYSTEM_PROMPT = `You are a specialist freight forwarding document extraction AI for the South African market.
-You extract structured shipment data from logistics emails and documents.
-
-CRITICAL RULES:
-1. Set confidence to HIGH only when the value is explicitly and clearly stated in the source material.
-2. If a field is not present in the documents, leave value as null — never guess.
-3. For weights, always note the unit (KGS, LBS, CBM).
-4. For HS codes, extract exactly as written — do not correct or expand.
-5. For ports, use standard port codes where identifiable (ZADUR, ZACPT, CNSHA).
-6. South African ports: ZADUR (Durban), ZACPT (Cape Town), ZAPLZ (Port Elizabeth)
-7. HS codes must be 8 digits for SARS — note if extracted code is not 8 digits
-8. Common incoterms in SA: FOB, CIF, CFR, DAP, DDP, EXW
-
-Respond with valid JSON only, no additional text. Use this schema:
-{
-  "shipper_name": {"value": null, "confidence": "low"},
-  "shipper_address": {"value": null, "confidence": "low"},
-  "consignee_name": {"value": null, "confidence": "low"},
-  "consignee_address": {"value": null, "confidence": "low"},
-  "origin_port": {"value": null, "confidence": "low"},
-  "destination_port": {"value": null, "confidence": "low"},
-  "cargo_description": {"value": null, "confidence": "low"},
-  "hs_code_primary": {"value": null, "confidence": "low"},
-  "gross_weight": {"value": null, "confidence": "low"},
-  "net_weight": {"value": null, "confidence": "low"},
-  "weight_unit": {"value": "KGS", "confidence": "high"},
-  "number_of_packages": {"value": null, "confidence": "low"},
-  "incoterms": {"value": null, "confidence": "low"},
-  "invoice_number": {"value": null, "confidence": "low"},
-  "invoice_value": {"value": null, "confidence": "low"},
-  "currency": {"value": "USD", "confidence": "medium"},
-  "awb_or_bl_number": {"value": null, "confidence": "low"},
-  "overall_confidence": "low",
-  "extraction_notes": ""
-}`;
+import {
+  EXTRACTION_SYSTEM_PROMPT,
+  defaultExtraction,
+  parseExtractionResponse,
+  type ExtractionResult,
+  type DocumentType,
+} from "@/lib/prompts";
+import { sanitizeError } from "@/lib/api-utils";
 
 // ─── Helper: determine if file is an image ───────────────────────────────────
 
@@ -123,77 +30,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
-}
-
-// ─── Helper: parse AI response JSON ──────────────────────────────────────────
-
-function parseExtractionResponse(content: string): ExtractionResult {
-  const defaults = defaultExtraction();
-  try {
-    // Try to extract JSON from the response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return {
-        ...defaults,
-        extraction_notes: "AI response did not contain valid JSON structure.",
-      };
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    const result: ExtractionResult = { ...defaults };
-
-    // Map each field, validating structure
-    const fields = [
-      "shipper_name", "shipper_address", "consignee_name", "consignee_address",
-      "origin_port", "destination_port", "cargo_description", "hs_code_primary",
-      "gross_weight", "net_weight", "weight_unit", "number_of_packages",
-      "incoterms", "invoice_number", "invoice_value", "currency", "awb_or_bl_number",
-    ] as const;
-
-    for (const field of fields) {
-      if (parsed[field] && typeof parsed[field] === "object") {
-        result[field] = {
-          value: parsed[field].value ?? null,
-          confidence: ["high", "medium", "low"].includes(parsed[field].confidence)
-            ? parsed[field].confidence
-            : "low",
-        };
-      }
-    }
-
-    // Overall confidence
-    if (["high", "medium", "low"].includes(parsed.overall_confidence)) {
-      result.overall_confidence = parsed.overall_confidence;
-    } else {
-      // Calculate overall confidence from field confidences
-      const highCount = fields.filter(
-        (f) => result[f].confidence === "high" && result[f].value !== null
-      ).length;
-      const nonNullCount = fields.filter((f) => result[f].value !== null).length;
-
-      if (nonNullCount === 0) {
-        result.overall_confidence = "low";
-      } else if (highCount / nonNullCount > 0.6) {
-        result.overall_confidence = "high";
-      } else if (highCount / nonNullCount > 0.3) {
-        result.overall_confidence = "medium";
-      } else {
-        result.overall_confidence = "low";
-      }
-    }
-
-    // Extraction notes
-    if (parsed.extraction_notes && typeof parsed.extraction_notes === "string") {
-      result.extraction_notes = parsed.extraction_notes;
-    }
-
-    return result;
-  } catch {
-    return {
-      ...defaults,
-      extraction_notes: "Failed to parse AI extraction response.",
-    };
-  }
 }
 
 // ─── POST handler ────────────────────────────────────────────────────────────
@@ -302,7 +138,7 @@ export async function POST(request: NextRequest) {
           model: "default",
           messages: [
             { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-            { role: "user", content: userMessage as any },
+            { role: "user", content: userMessage as unknown as string },
           ],
           stream: false,
         });
@@ -368,7 +204,7 @@ export async function POST(request: NextRequest) {
           model: "default",
           messages: [
             { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-            { role: "user", content: userMessage as any },
+            { role: "user", content: userMessage as unknown as string },
           ],
           stream: false,
         });
@@ -397,12 +233,12 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error in AI extraction:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         success: false,
         error: "internal_error",
-        message: error instanceof Error ? error.message : "Failed to extract data",
+        message: sanitizeError(error),
         extracted: defaultExtraction(),
       },
       { status: 500 }

@@ -1,0 +1,21 @@
+[CargoIQ Demo Attachment - packing_list #43264]
+
+This is a simulated freight document for development purposes.
+Generated at: 2026-05-27T05:14:14.699Z
+
+Document Type: packing_list
+Reference: 43264
+Status: DEMO
+
+--- DOCUMENT CONTENT ---
+Shipper: Demo Shipping Co.
+Consignee: Demo Imports (Pty) Ltd
+Origin: CNSHA (Shanghai)
+Destination: ZADUR (Durban)
+Gross Weight: 8181.8 KGS
+Net Weight: 18742.2 KGS
+Packages: 227
+HS Code: 61653457
+Invoice Value: USD 36344.32
+Incoterms: CIF
+--- END DOCUMENT ---

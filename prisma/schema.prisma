@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "sqlite" // Production should use "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -61,6 +61,8 @@ model EmailConnection {
 
   organisation    Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   inboundEmails   InboundEmail[]
+
+  @@index([orgId])
 }
 
 model InboundEmail {
@@ -78,6 +80,8 @@ model InboundEmail {
 
   emailConnection EmailConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
   documents       Document[]
+
+  @@index([orgId])
 }
 
 model Document {
@@ -95,6 +99,8 @@ model Document {
 
   inboundEmail InboundEmail?  @relation(fields: [emailId], references: [id], onDelete: SetNull)
   shipmentDocs ShipmentDocument[]
+
+  @@index([orgId])
 }
 
 model Shipment {
@@ -153,6 +159,10 @@ model Shipment {
   auditLogs          AuditLog[]
 
   @@unique([orgId, reference])
+  @@index([orgId])
+  @@index([orgId, status])
+  @@index([orgId, shieldStatus])
+  @@index([createdAt])
 }
 
 model ShipmentDocument {
@@ -182,6 +192,8 @@ model CargoLineItem {
   createdAt    DateTime @default(now())
 
   shipment     Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
 }
 
 model ComplianceEvent {
@@ -199,6 +211,9 @@ model ComplianceEvent {
   createdAt       DateTime @default(now())
 
   shipment        Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([orgId])
 }
 
 model AuditLog {
@@ -215,6 +230,9 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   shipment    Shipment? @relation(fields: [entityId], references: [id])
+
+  @@index([entityId])
+  @@index([orgId])
 }
 
 model CwExecution {
@@ -233,6 +251,9 @@ model CwExecution {
   createdAt      DateTime @default(now())
 
   shipment       Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([orgId])
 }
 
 model RlaStatus {

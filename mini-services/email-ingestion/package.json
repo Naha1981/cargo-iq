@@ -1,0 +1,11 @@
+{
+  "name": "cargoiq-email-ingestion",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "imapflow": "^1.0.164",
+    "z-ai-web-dev-sdk": "latest"
+  }
+}

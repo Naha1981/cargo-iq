@@ -1,0 +1,21 @@
+[CargoIQ Demo Attachment - bill_of_lading #40757]
+
+This is a simulated freight document for development purposes.
+Generated at: 2026-05-27T06:45:44.189Z
+
+Document Type: bill_of_lading
+Reference: 40757
+Status: DEMO
+
+--- DOCUMENT CONTENT ---
+Shipper: Demo Shipping Co.
+Consignee: Demo Imports (Pty) Ltd
+Origin: CNSHA (Shanghai)
+Destination: ZADUR (Durban)
+Gross Weight: 9271.6 KGS
+Net Weight: 8870.0 KGS
+Packages: 92
+HS Code: 52029273
+Invoice Value: USD 37976.86
+Incoterms: CIF
+--- END DOCUMENT ---

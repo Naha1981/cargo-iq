@@ -1,0 +1,21 @@
+[CargoIQ Demo Attachment - customs_declaration #48665]
+
+This is a simulated freight document for development purposes.
+Generated at: 2026-05-27T05:58:28.558Z
+
+Document Type: customs_declaration
+Reference: 48665
+Status: DEMO
+
+--- DOCUMENT CONTENT ---
+Shipper: Demo Shipping Co.
+Consignee: Demo Imports (Pty) Ltd
+Origin: CNSHA (Shanghai)
+Destination: ZADUR (Durban)
+Gross Weight: 19006.3 KGS
+Net Weight: 6192.8 KGS
+Packages: 122
+HS Code: 76698497
+Invoice Value: USD 35255.40
+Incoterms: CIF
+--- END DOCUMENT ---

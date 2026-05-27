@@ -1,0 +1,21 @@
+[CargoIQ Demo Attachment - certificate_of_origin #41814]
+
+This is a simulated freight document for development purposes.
+Generated at: 2026-05-27T05:25:18.090Z
+
+Document Type: certificate_of_origin
+Reference: 41814
+Status: DEMO
+
+--- DOCUMENT CONTENT ---
+Shipper: Demo Shipping Co.
+Consignee: Demo Imports (Pty) Ltd
+Origin: CNSHA (Shanghai)
+Destination: ZADUR (Durban)
+Gross Weight: 3762.3 KGS
+Net Weight: 16981.3 KGS
+Packages: 67
+HS Code: 57678374
+Invoice Value: USD 7474.93
+Incoterms: CIF
+--- END DOCUMENT ---

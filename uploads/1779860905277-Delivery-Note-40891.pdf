@@ -1,0 +1,21 @@
+[CargoIQ Demo Attachment - delivery_note #40891]
+
+This is a simulated freight document for development purposes.
+Generated at: 2026-05-27T05:48:25.266Z
+
+Document Type: delivery_note
+Reference: 40891
+Status: DEMO
+
+--- DOCUMENT CONTENT ---
+Shipper: Demo Shipping Co.
+Consignee: Demo Imports (Pty) Ltd
+Origin: CNSHA (Shanghai)
+Destination: ZADUR (Durban)
+Gross Weight: 3108.8 KGS
+Net Weight: 16310.6 KGS
+Packages: 103
+HS Code: 78003543
+Invoice Value: USD 5752.85
+Incoterms: CIF
+--- END DOCUMENT ---
