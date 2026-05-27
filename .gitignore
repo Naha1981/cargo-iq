@@ -52,3 +52,25 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Uploads — user-generated files, not source code
+/uploads/
+
+# Database — local SQLite, not for production
+/db/
+
+# Build artifacts
+/public-serve/
+
+# Screenshots
+*.png
+!public/*.png
+
+# Agent context
+/agent-ctx/
+
+# Mini services state
+mini-services/*/state.json
+
+# Backup files
+*.bak
