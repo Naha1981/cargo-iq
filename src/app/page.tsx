@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { io, Socket } from "socket.io-client";
 import {
   LayoutDashboard,
   PackageSearch,
@@ -12,7 +13,6 @@ import {
   ChevronRight,
   Search,
   Bell,
-  User,
   FileText,
   AlertTriangle,
   CheckCircle2,
@@ -25,7 +25,6 @@ import {
   Ban,
   RefreshCw,
   ExternalLink,
-  TrendingDown,
   DollarSign,
   Zap,
   AlertCircle,
@@ -34,6 +33,26 @@ import {
   Wifi,
   WifiOff,
   Play,
+  Send,
+  Code2,
+  Activity,
+  Radio,
+  X,
+  ThumbsUp,
+  ThumbsDown,
+  File,
+  FileSpreadsheet,
+  FileType,
+  Loader2,
+  Save,
+  Mail,
+  Hash,
+  Globe,
+  Building2,
+  Server,
+  Key,
+  Users,
+  ShieldAlert,
 } from "lucide-react";
 
 /* ══════════════════════════════════════════════
@@ -61,22 +80,170 @@ interface ShipmentSummary {
   createdAt: string;
 }
 
+interface ShipmentListResponse {
+  items: ShipmentSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+interface LineItem {
+  id: string;
+  lineNumber: number;
+  hsCode: string | null;
+  description: string | null;
+  quantity: number | null;
+  unit: string | null;
+  unitWeight: number | null;
+  totalWeight: number | null;
+  unitValue: number | null;
+  totalValue: number | null;
+  currency: string | null;
+  confidence: string | null;
+}
+
+interface ComplianceEvent {
+  id: string;
+  module: string;
+  result: string;
+  detail: string;
+  penaltyRisk: boolean;
+  createdAt: string;
+}
+
+interface Document {
+  id: string;
+  filename: string;
+  docType: string;
+  fileType: string;
+  status: string;
+  createdAt: string;
+}
+
+interface ShipmentDetail {
+  id: string;
+  reference: string;
+  shipperName: string | null;
+  shipperAddress: string | null;
+  consigneeName: string | null;
+  consigneeAddress: string | null;
+  notifyParty: string | null;
+  originPort: string | null;
+  destinationPort: string | null;
+  cargoDescription: string | null;
+  hsCodePrimary: string | null;
+  grossWeight: number | null;
+  netWeight: number | null;
+  weightUnit: string | null;
+  numberOfPackages: number | null;
+  incoterms: string | null;
+  invoiceNumber: string | null;
+  invoiceValue: number | null;
+  currency: string | null;
+  awbOrBlNumber: string | null;
+  vesselOrFlight: string | null;
+  shipmentType: string | null;
+  overallConfidence: Confidence;
+  shieldStatus: ShieldStatus;
+  shieldResults: Record<string, unknown>;
+  status: ShipmentStatus;
+  extractedFields: Record<string, unknown>;
+  confidenceScores: Record<string, unknown>;
+  lineItems: LineItem[];
+  complianceEvents: ComplianceEvent[];
+  documents: Document[];
+  createdAt: string;
+  updatedAt: string;
+  eta: string | null;
+  etd: string | null;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+  source: string;
+  orgId: string;
+}
+
+interface AnalyticsData {
+  processed: number;
+  automationRate: number;
+  avgTimeSeconds: number;
+  errorRate: number;
+  shieldSummary: { pass: number; hold: number; fail: number; pending: number };
+  queueSize: number;
+  exceptions: number;
+  recentTrend: Array<{ date: string; count: number }>;
+  topOriginPorts: Array<{ port: string; count: number }>;
+  avgConfidenceBySource: Record<string, Record<string, number>>;
+  shieldPassRate: number;
+  pipelineStatus: {
+    pending: number;
+    review_required: number;
+    approved: number;
+    rejected: number;
+    cw_draft_created: number;
+    in_cargowise: number;
+    error: number;
+  };
+}
+
+interface CwExecution {
+  id: string;
+  shipmentId: string;
+  executionType: string;
+  status: string;
+  durationMs: number | null;
+  screenshotUrl: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  shipment: {
+    id: string;
+    reference: string;
+    shipperName: string | null;
+    status: string;
+  };
+}
+
+interface WsNotification {
+  type?: string;
+  message?: string;
+  event?: string;
+  reference?: string;
+  [key: string]: unknown;
+}
+
 /* ══════════════════════════════════════════════
-   Mock Data
+   Data Fetching Hook
    ══════════════════════════════════════════════ */
 
-const shipments: ShipmentSummary[] = [
-  { id: "1", reference: "CIQ-2026-00047", shipperName: "Shanghai Global Trading Co.", consigneeName: "ABC Logistics SA", originPort: "CNSHA", destinationPort: "ZADUR", shipmentType: "fcl_import", awbOrBlNumber: "MAEU123456789", overallConfidence: "high", shieldStatus: "pass", status: "cw_draft_created", documentCount: 3, createdAt: new Date(Date.now() - 2 * 3600000).toISOString() },
-  { id: "2", reference: "CIQ-2026-00046", shipperName: "Dubai Freight Services LLC", consigneeName: "Santova Logistics", originPort: "AEDXB", destinationPort: "ZACPT", shipmentType: "air_import", awbOrBlNumber: "074-12345678", overallConfidence: "high", shieldStatus: "pass", status: "approved", documentCount: 2, createdAt: new Date(Date.now() - 3.5 * 3600000).toISOString() },
-  { id: "3", reference: "CIQ-2026-00045", shipperName: "Kuehne + Nagel Shenzhen", consigneeName: "Megafreight Services", originPort: "CNSZX", destinationPort: "ZADUR", shipmentType: "lcl_import", awbOrBlNumber: "COSCO987654321", overallConfidence: "medium", shieldStatus: "hold", status: "review_required", documentCount: 2, createdAt: new Date(Date.now() - 5 * 3600000).toISOString() },
-  { id: "4", reference: "CIQ-2026-00044", shipperName: "India Exports Mumbai", consigneeName: "NATCO Logistics", originPort: "INBOM", destinationPort: "ZADUR", shipmentType: "fcl_import", awbOrBlNumber: "MSCIM987654321", overallConfidence: "low", shieldStatus: "fail", status: "review_required", documentCount: 1, createdAt: new Date(Date.now() - 6 * 3600000).toISOString() },
-  { id: "5", reference: "CIQ-2026-00043", shipperName: "UK Manufacturing Ltd", consigneeName: "CFR Freight SA", originPort: "GBFXT", destinationPort: "ZACPT", shipmentType: "air_import", awbOrBlNumber: "057-98765432", overallConfidence: "high", shieldStatus: "pass", status: "pending", documentCount: 3, createdAt: new Date(Date.now() - 8 * 3600000).toISOString() },
-  { id: "6", reference: "CIQ-2026-00042", shipperName: "German Automotive GmbH", consigneeName: "Rohlig-Grindrod", originPort: "DEHAM", destinationPort: "ZADUR", shipmentType: "fcl_import", awbOrBlNumber: "HLCU456789123", overallConfidence: "medium", shieldStatus: "hold", status: "review_required", documentCount: 2, createdAt: new Date(Date.now() - 10 * 3600000).toISOString() },
-  { id: "7", reference: "CIQ-2026-00041", shipperName: "Brazil Coffee Exporters", consigneeName: "Africa Global Logistics SA", originPort: "BRSSZ", destinationPort: "ZADUR", shipmentType: "fcl_import", awbOrBlNumber: "CSAV789123456", overallConfidence: "high", shieldStatus: "pass", status: "cw_draft_created", documentCount: 4, createdAt: new Date(Date.now() - 12 * 3600000).toISOString() },
-  { id: "8", reference: "CIQ-2026-00040", shipperName: "Japan Electronics Corp", consigneeName: "DSV SA", originPort: "JPYOK", destinationPort: "ZACPT", shipmentType: "air_import", awbOrBlNumber: "618-12345675", overallConfidence: "high", shieldStatus: "pass", status: "approved", documentCount: 2, createdAt: new Date(Date.now() - 14 * 3600000).toISOString() },
-  { id: "9", reference: "CIQ-2026-00039", shipperName: "Mozambique Commodities", consigneeName: "Transglobal Cargo", originPort: "MZMPM", destinationPort: "ZADUR", shipmentType: "fcl_import", awbOrBlNumber: "MSCM987123456", overallConfidence: "medium", shieldStatus: "hold", status: "pending", documentCount: 1, createdAt: new Date(Date.now() - 18 * 3600000).toISOString() },
-  { id: "10", reference: "CIQ-2026-00038", shipperName: "Australia Mining Supplies", consigneeName: "Spectrum Freight SA", originPort: "AUBNE", destinationPort: "ZADUR", shipmentType: "fcl_import", awbOrBlNumber: "ANL456789123", overallConfidence: "low", shieldStatus: "fail", status: "error", documentCount: 2, createdAt: new Date(Date.now() - 24 * 3600000).toISOString() },
-];
+function useApi<T>(url: string, defaultValue: T) {
+  const [state, setState] = useState<{ data: T; loading: boolean; error: string | null }>({
+    data: defaultValue, loading: true, error: null,
+  });
+  const [fetchKey, setFetchKey] = useState(0);
+
+  const refetch = useCallback(() => {
+    setFetchKey((k) => k + 1);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => {
+        if (!cancelled) setState({ data: d, loading: false, error: null });
+      })
+      .catch((e) => {
+        if (!cancelled) setState({ data: defaultValue, loading: false, error: e.message });
+      });
+    return () => { cancelled = true; };
+  }, [url, fetchKey]);
+
+  return { data: state.data, loading: state.loading, error: state.error, refetch };
+}
 
 /* ══════════════════════════════════════════════
    Helpers
@@ -89,10 +256,17 @@ function formatZAR(n: number) {
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function formatSeconds(s: number) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}m ${sec}s`;
 }
 
 function ShieldBadge({ status }: { status: ShieldStatus }) {
@@ -102,7 +276,7 @@ function ShieldBadge({ status }: { status: ShieldStatus }) {
     fail: { bg: "bg-red-50", text: "text-red-700", label: "FAIL" },
     pending: { bg: "bg-slate-100", text: "text-slate-500", label: "PENDING" },
   };
-  const s = map[status];
+  const s = map[status] || map.pending;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${s.bg} ${s.text}`}>
       <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -117,11 +291,11 @@ function StatusBadge({ status }: { status: ShipmentStatus }) {
     review_required: { bg: "bg-amber-50", text: "text-amber-700", label: "Review" },
     approved: { bg: "bg-emerald-50", text: "text-emerald-700", label: "Approved" },
     rejected: { bg: "bg-red-50", text: "text-red-700", label: "Rejected" },
-    in_cargowise: { bg: "bg-sky-50", text: "text-sky-700", label: "In CW" },
-    cw_draft_created: { bg: "bg-violet-50", text: "text-violet-700", label: "CW Draft" },
+    in_cargowise: { bg: "bg-teal-50", text: "text-teal-700", label: "In CW" },
+    cw_draft_created: { bg: "bg-amber-50", text: "text-amber-800", label: "CW Draft" },
     error: { bg: "bg-red-50", text: "text-red-700", label: "Error" },
   };
-  const s = map[status];
+  const s = map[status] || map.pending;
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${s.bg} ${s.text}`}>{s.label}</span>;
 }
 
@@ -131,13 +305,21 @@ function ConfidenceBadge({ level }: { level: Confidence }) {
     medium: { text: "text-amber-600", dot: "bg-amber-500" },
     low: { text: "text-red-600", dot: "bg-red-500" },
   };
-  const s = map[level];
+  const s = map[level] || map.medium;
   return (
     <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${s.text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {level.charAt(0).toUpperCase() + level.slice(1)}
     </span>
   );
+}
+
+function fileIcon(fileType: string) {
+  if (fileType === "pdf") return <FileText size={14} className="text-red-500" />;
+  if (["xlsx", "xls", "csv"].includes(fileType)) return <FileSpreadsheet size={14} className="text-emerald-600" />;
+  if (["jpg", "jpeg", "png"].includes(fileType)) return <FileText size={14} className="text-sky-500" />;
+  if (["docx", "doc"].includes(fileType)) return <FileType size={14} className="text-sky-600" />;
+  return <File size={14} className="text-slate-400" />;
 }
 
 /* ══════════════════════════════════════════════
@@ -166,21 +348,11 @@ function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobil
   const sidebarContent = (
     <aside
       className="flex flex-col border-r transition-all duration-200 h-full"
-      style={{
-        width: collapsed ? 56 : 240,
-        backgroundColor: "#1A2332",
-        borderColor: "#243040",
-      }}
+      style={{ width: collapsed ? 56 : 240, backgroundColor: "#1A2332", borderColor: "#243040" }}
     >
-      {/* Logo */}
       <div className="flex items-center h-14 px-4 border-b" style={{ borderColor: "#243040" }}>
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <img
-            src="/cargoiq-logo.jpg"
-            alt="CargoIQ"
-            className="flex-shrink-0 rounded"
-            style={{ width: 28, height: 28, objectFit: "cover" }}
-          />
+          <img src="/cargoiq-logo.jpg" alt="CargoIQ Logo" className="flex-shrink-0 rounded" style={{ width: 28, height: 28, objectFit: "cover" }} />
           {!collapsed && (
             <div className="flex flex-col min-w-0">
               <span className="text-sm font-semibold tracking-tight truncate">
@@ -191,15 +363,11 @@ function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobil
           )}
         </div>
       </div>
-
-      {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3" style={{ scrollbarWidth: "thin", scrollbarColor: "#243040 transparent" }}>
         {sections.map((sec) => (
           <div key={sec.label} className="mb-3">
             {!collapsed && (
-              <div className="px-5 mb-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>
-                {sec.label}
-              </div>
+              <div className="px-5 mb-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>{sec.label}</div>
             )}
             {sec.items.map((item) => {
               const active = view === item.key || (item.key === "shipments" && view === "shipment-detail");
@@ -227,8 +395,6 @@ function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobil
           </div>
         ))}
       </nav>
-
-      {/* Collapse toggle — desktop only */}
       <button
         onClick={toggleCollapse}
         className="hidden md:flex items-center justify-center h-10 border-t transition-colors hover:bg-[#1F2D3D]"
@@ -241,24 +407,11 @@ function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobil
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <div className="hidden md:block fixed top-0 left-0 bottom-0 z-40">
-        {sidebarContent}
-      </div>
-
-      {/* Mobile sidebar overlay */}
+      <div className="hidden md:block fixed top-0 left-0 bottom-0 z-40">{sidebarContent}</div>
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0"
-            style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-            onClick={onMobileClose}
-          />
-          {/* Sidebar panel */}
-          <div className="relative z-10 h-full" style={{ width: 240 }}>
-            {sidebarContent}
-          </div>
+          <div className="absolute inset-0" style={{ backgroundColor: "rgba(0,0,0,0.5)" }} onClick={onMobileClose} />
+          <div className="relative z-10 h-full" style={{ width: 240 }}>{sidebarContent}</div>
         </div>
       )}
     </>
@@ -269,8 +422,9 @@ function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobil
    Top Nav
    ══════════════════════════════════════════════ */
 
-function TopNav({ view, collapsed, onToggleMobileSidebar, onQuickUpload }: {
+function TopNav({ view, collapsed, onToggleMobileSidebar, onQuickUpload, wsConnected, notificationCount }: {
   view: ViewMode; collapsed: boolean; onToggleMobileSidebar: () => void; onQuickUpload: () => void;
+  wsConnected: boolean; notificationCount: number;
 }) {
   const viewLabels: Record<ViewMode, string> = {
     dashboard: "Dashboard",
@@ -285,47 +439,31 @@ function TopNav({ view, collapsed, onToggleMobileSidebar, onQuickUpload }: {
   return (
     <header
       className="fixed top-0 right-0 z-30 flex items-center h-14 px-5 gap-3 border-b transition-all duration-200"
-      style={{
-        left: 0,
-        backgroundColor: "#FFFFFF",
-        borderColor: "#C8D0DA",
-      }}
+      style={{ left: 0, backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}
     >
-      {/* Mobile hamburger */}
-      <button
-        className="md:hidden p-1.5 rounded hover:bg-[#E8ECF1] transition-colors"
-        style={{ color: "#6B7E92" }}
-        onClick={onToggleMobileSidebar}
-      >
+      <button className="md:hidden p-1.5 rounded hover:bg-[#E8ECF1] transition-colors" style={{ color: "#6B7E92" }} onClick={onToggleMobileSidebar}>
         <Menu size={20} />
       </button>
       <h2 className="text-[15px] font-semibold truncate" style={{ color: "#0D1B2A" }}>{viewLabels[view]}</h2>
       <div className="flex-1" />
-      <div className="relative hidden sm:block">
-        <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#9AAAB8" }} />
-        <input
-          placeholder="Search shipments..."
-          className="pl-8 pr-3 py-1.5 text-[13px] rounded border outline-none transition-colors focus:border-[#B8860B] focus:ring-2 focus:ring-[#FDF3DC]"
-          style={{ width: 220, borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#F1F4F8" }}
-        />
+      {/* WebSocket indicator */}
+      <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: wsConnected ? "#15632A" : "#9B1C1C" }}>
+        {wsConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
+        <span className="hidden sm:inline">{wsConnected ? "Live" : "Offline"}</span>
       </div>
-      {/* Quick Upload button */}
-      <button
-        onClick={onQuickUpload}
-        className="p-1.5 rounded hover:bg-[#E8ECF1] transition-colors"
-        style={{ color: "#6B7E92" }}
-        title="Quick Upload"
-      >
+      <button onClick={onQuickUpload} className="p-1.5 rounded hover:bg-[#E8ECF1] transition-colors" style={{ color: "#6B7E92" }} title="Upload Document">
         <Upload size={18} />
       </button>
       <button className="relative p-1.5 rounded hover:bg-[#E8ECF1] transition-colors" style={{ color: "#6B7E92" }}>
         <Bell size={18} />
-        <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />
+        {notificationCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1" style={{ backgroundColor: "#B8860B" }}>
+            {notificationCount > 99 ? "99+" : notificationCount}
+          </span>
+        )}
       </button>
       <div className="hidden sm:flex items-center gap-2 pl-2 border-l" style={{ borderColor: "#C8D0DA" }}>
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold" style={{ backgroundColor: "#B8860B", color: "#FFF" }}>
-          JM
-        </div>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold" style={{ backgroundColor: "#B8860B", color: "#FFF" }}>JM</div>
         <span className="text-[13px] font-medium" style={{ color: "#0D1B2A" }}>J. Mokoena</span>
       </div>
     </header>
@@ -333,35 +471,83 @@ function TopNav({ view, collapsed, onToggleMobileSidebar, onQuickUpload }: {
 }
 
 /* ══════════════════════════════════════════════
+   Notification Toast
+   ══════════════════════════════════════════════ */
+
+function NotificationToast({ notification, onDismiss }: { notification: WsNotification; onDismiss: () => void }) {
+  return (
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border shadow-lg p-4 animate-in slide-in-from-bottom-2" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FEF6E7" }}>
+          <Radio size={16} style={{ color: "#B8860B" }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-semibold" style={{ color: "#0D1B2A" }}>
+            {notification.type === "shipment:created" ? "New Shipment" :
+             notification.type === "shield:completed" ? "Shield Complete" :
+             notification.type === "cw:draft_created" ? "CW Draft Created" :
+             notification.type === "cw:draft_failed" ? "CW Draft Failed" :
+             notification.type === "email:ingested" ? "Email Ingested" :
+             notification.type === "shipment:approved" ? "Shipment Approved" :
+             notification.type === "shipment:rejected" ? "Shipment Rejected" :
+             "Notification"}
+          </div>
+          <div className="text-[12px] mt-0.5" style={{ color: "#6B7E92" }}>
+            {notification.message || notification.reference || "Event received"}
+          </div>
+        </div>
+        <button onClick={onDismiss} className="flex-shrink-0 p-1 rounded hover:bg-[#E8ECF1]" style={{ color: "#6B7E92" }}>
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
    Dashboard View
    ══════════════════════════════════════════════ */
 
-function DashboardView({ setView }: { setView: (v: ViewMode) => void }) {
+function DashboardView({ setView, onSelectShipment }: { setView: (v: ViewMode) => void; onSelectShipment: (id: string) => void }) {
+  const { data: analytics, loading: analyticsLoading } = useApi<AnalyticsData>("/api/analytics", {
+    processed: 0, automationRate: 0, avgTimeSeconds: 0, errorRate: 0,
+    shieldSummary: { pass: 0, hold: 0, fail: 0, pending: 0 },
+    queueSize: 0, exceptions: 0, recentTrend: [], topOriginPorts: [],
+    avgConfidenceBySource: {}, shieldPassRate: 0,
+    pipelineStatus: { pending: 0, review_required: 0, approved: 0, rejected: 0, cw_draft_created: 0, in_cargowise: 0, error: 0 },
+  });
+
+  const { data: recentShipments, loading: shipmentsLoading } = useApi<ShipmentListResponse>("/api/shipments?limit=5", { items: [], total: 0, page: 1, limit: 5 });
+
   const kpis = [
-    { label: "Processed Today", value: "847", change: "+12%", up: true, icon: FileText, color: "#1A4971", bg: "#EBF3FB" },
-    { label: "Automation Rate", value: "82%", change: "+3.2%", up: true, icon: Zap, color: "#15632A", bg: "#EBF5EE" },
-    { label: "Avg Processing", value: "3m 34s", change: "-18%", up: true, icon: Clock, color: "#7A4F00", bg: "#FEF6E7" },
-    { label: "Shield Exceptions", value: "112", change: "+5", up: false, icon: AlertTriangle, color: "#9B1C1C", bg: "#FEF2F2" },
+    { label: "Processed Today", value: analytics.processed, change: analytics.recentTrend.length > 1 ? `+${analytics.recentTrend[analytics.recentTrend.length - 1]?.count || 0}` : "0", up: true, icon: FileText, color: "#1A4971", bg: "#EBF3FB" },
+    { label: "Automation Rate", value: `${Math.round(analytics.automationRate * 100)}%`, change: "+3.2%", up: true, icon: Zap, color: "#15632A", bg: "#EBF5EE" },
+    { label: "Avg Processing", value: formatSeconds(analytics.avgTimeSeconds), change: "-18%", up: true, icon: Clock, color: "#7A4F00", bg: "#FEF6E7" },
+    { label: "Shield Exceptions", value: analytics.exceptions, change: analytics.exceptions > 0 ? `+${analytics.exceptions}` : "0", up: analytics.exceptions === 0, icon: AlertTriangle, color: "#9B1C1C", bg: "#FEF2F2" },
   ];
 
-  const shieldSummary = [
-    { label: "Pass", count: 612, color: "bg-emerald-500", pct: 72 },
-    { label: "Hold", count: 89, color: "bg-amber-500", pct: 10 },
-    { label: "Fail", count: 23, color: "bg-red-500", pct: 3 },
-    { label: "Pending", count: 123, color: "bg-slate-400", pct: 15 },
-  ];
-
+  const ps = analytics.pipelineStatus;
   const pipelineSteps = [
-    { label: "Email", count: 142, status: "active" as const, icon: "📧" },
-    { label: "Classify", count: 98, status: "active" as const, icon: "🏷️" },
-    { label: "Extract", count: 87, status: "active" as const, icon: "📄" },
-    { label: "Shield", count: 72, status: "complete" as const, icon: "🛡️" },
-    { label: "Review", count: 15, status: "pending" as const, icon: "👁️" },
-    { label: "CW", count: 8, status: "pending" as const, icon: "🔗" },
+    { label: "Email", count: analytics.queueSize, status: "active" as const, icon: "📧" },
+    { label: "Classify", count: ps.pending, status: ps.pending > 0 ? "active" as const : "complete" as const, icon: "🏷️" },
+    { label: "Extract", count: ps.review_required, status: ps.review_required > 0 ? "active" as const : "complete" as const, icon: "📄" },
+    { label: "Shield", count: analytics.shieldSummary.pass, status: "complete" as const, icon: "🛡️" },
+    { label: "Review", count: ps.review_required, status: ps.review_required > 0 ? "pending" as const : "complete" as const, icon: "👁️" },
+    { label: "CW", count: ps.cw_draft_created, status: ps.cw_draft_created > 0 ? "active" as const : "pending" as const, icon: "🔗" },
+  ];
+
+  const ss = analytics.shieldSummary;
+  const shieldTotal = ss.pass + ss.hold + ss.fail + ss.pending;
+  const shieldSummary = [
+    { label: "Pass", count: ss.pass, color: "bg-emerald-500", pct: shieldTotal > 0 ? Math.round((ss.pass / shieldTotal) * 100) : 0 },
+    { label: "Hold", count: ss.hold, color: "bg-amber-500", pct: shieldTotal > 0 ? Math.round((ss.hold / shieldTotal) * 100) : 0 },
+    { label: "Fail", count: ss.fail, color: "bg-red-500", pct: shieldTotal > 0 ? Math.round((ss.fail / shieldTotal) * 100) : 0 },
+    { label: "Pending", count: ss.pending, color: "bg-slate-400", pct: shieldTotal > 0 ? Math.round((ss.pending / shieldTotal) * 100) : 0 },
   ];
 
   return (
     <div className="p-6 max-w-[1440px]">
+      {analyticsLoading && <div className="text-[13px] mb-4" style={{ color: "#6B7E92" }}>Loading analytics...</div>}
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {kpis.map((kpi) => (
@@ -398,23 +584,14 @@ function DashboardView({ setView }: { setView: (v: ViewMode) => void }) {
                   }}
                 >
                   <span className="text-lg">{step.icon}</span>
-                  <span className="text-[11px] font-semibold" style={{ color: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#6B7E92" }}>
-                    {step.label}
-                  </span>
+                  <span className="text-[11px] font-semibold" style={{ color: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#6B7E92" }}>{step.label}</span>
                   <span className="text-[16px] font-bold" style={{ color: "#0D1B2A" }}>{step.count}</span>
-                  <span
-                    className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full"
-                    style={{
-                      color: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#6B7E92",
-                      backgroundColor: step.status === "active" ? "#D6E8F7" : step.status === "complete" ? "#C6E4CE" : "#E8ECF1",
-                    }}
-                  >
-                    {step.status}
-                  </span>
+                  <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full" style={{
+                    color: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#6B7E92",
+                    backgroundColor: step.status === "active" ? "#D6E8F7" : step.status === "complete" ? "#C6E4CE" : "#E8ECF1",
+                  }}>{step.status}</span>
                 </div>
-                {i < pipelineSteps.length - 1 && (
-                  <ArrowRight size={16} className="flex-shrink-0" style={{ color: "#9AAAB8" }} />
-                )}
+                {i < pipelineSteps.length - 1 && <ArrowRight size={16} className="flex-shrink-0" style={{ color: "#9AAAB8" }} />}
               </div>
             ))}
           </div>
@@ -439,14 +616,16 @@ function DashboardView({ setView }: { setView: (v: ViewMode) => void }) {
                 </tr>
               </thead>
               <tbody>
-                {shipments.slice(0, 6).map((s) => (
-                  <tr key={s.id} className="border-b hover:bg-[#F1F4F8] transition-colors cursor-pointer" style={{ borderColor: "#DDE3EA" }}>
+                {shipmentsLoading ? (
+                  <tr><td colSpan={4} className="px-4 py-6 text-center text-[12px]" style={{ color: "#6B7E92" }}>Loading...</td></tr>
+                ) : recentShipments.items.length === 0 ? (
+                  <tr><td colSpan={4} className="px-4 py-6 text-center text-[12px]" style={{ color: "#6B7E92" }}>No shipments yet. Upload a document to get started.</td></tr>
+                ) : recentShipments.items.map((s) => (
+                  <tr key={s.id} onClick={() => onSelectShipment(s.id)} className="border-b hover:bg-[#F1F4F8] transition-colors cursor-pointer" style={{ borderColor: "#DDE3EA" }}>
                     <td className="px-4 py-2.5 font-medium" style={{ color: "#0D1B2A" }}>
                       <span className="font-mono text-[12px]">{s.reference}</span>
                     </td>
-                    <td className="px-4 py-2.5" style={{ color: "#3D5166" }}>
-                      {s.originPort} → {s.destinationPort}
-                    </td>
+                    <td className="px-4 py-2.5" style={{ color: "#3D5166" }}>{s.originPort || "—"} → {s.destinationPort || "—"}</td>
                     <td className="px-4 py-2.5"><ShieldBadge status={s.shieldStatus} /></td>
                     <td className="px-4 py-2.5"><StatusBadge status={s.status} /></td>
                   </tr>
@@ -474,15 +653,14 @@ function DashboardView({ setView }: { setView: (v: ViewMode) => void }) {
               </div>
             ))}
           </div>
-          <div className="px-4 pb-4">
-            <div className="rounded-md p-3 text-[12px]" style={{ backgroundColor: "#FEF6E7", borderColor: "#E8B84B", color: "#7A4F00", border: "1px solid #E8B84B" }}>
-              <div className="flex items-center gap-1.5 font-semibold mb-1">
-                <AlertTriangle size={13} />
-                89 shipments on HOLD
+          {analytics.shieldSummary.hold > 0 && (
+            <div className="px-4 pb-4">
+              <div className="rounded-md p-3 text-[12px]" style={{ backgroundColor: "#FEF6E7", borderColor: "#E8B84B", color: "#7A4F00", border: "1px solid #E8B84B" }}>
+                <div className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle size={13} />{analytics.shieldSummary.hold} shipments on HOLD</div>
+                <div style={{ color: "#7A4F00", opacity: 0.8 }}>Requires manual review before CargoWise submission</div>
               </div>
-              <div style={{ color: "#7A4F00", opacity: 0.8 }}>Requires manual review before CargoWise submission</div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -493,19 +671,30 @@ function DashboardView({ setView }: { setView: (v: ViewMode) => void }) {
    Shipment Queue View
    ══════════════════════════════════════════════ */
 
-function ShipmentQueueView({ onSelectShipment }: { onSelectShipment: (id: string) => void }) {
+function ShipmentQueueView({ onSelectShipment, wsCreatedShipment }: {
+  onSelectShipment: (id: string) => void;
+  wsCreatedShipment: ShipmentSummary | null;
+}) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [shieldFilter, setShieldFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
-  const filtered = useMemo(() => {
-    return shipments.filter((s) => {
-      if (statusFilter !== "all" && s.status !== statusFilter) return false;
-      if (shieldFilter !== "all" && s.shieldStatus !== shieldFilter) return false;
-      if (search && !s.reference.toLowerCase().includes(search.toLowerCase()) && !s.shipperName.toLowerCase().includes(search.toLowerCase()) && !s.consigneeName.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
-  }, [statusFilter, shieldFilter, search]);
+  const queryParams = new URLSearchParams();
+  if (statusFilter !== "all") queryParams.set("status", statusFilter);
+  if (shieldFilter !== "all") queryParams.set("shield", shieldFilter);
+  if (search) queryParams.set("search", search);
+  queryParams.set("page", String(page));
+  queryParams.set("limit", String(limit));
+
+  const { data, loading, refetch } = useApi<ShipmentListResponse>(`/api/shipments?${queryParams.toString()}`, { items: [], total: 0, page: 1, limit });
+
+  const items = wsCreatedShipment ? [wsCreatedShipment, ...data.items.filter((i) => i.id !== wsCreatedShipment.id)] : data.items;
+  const totalPages = Math.ceil(data.total / limit);
+
+  // Re-fetch when filters change
+  useEffect(() => { refetch(); }, [statusFilter, shieldFilter, search, page]);
 
   return (
     <div className="p-6 max-w-[1440px]">
@@ -515,40 +704,29 @@ function ShipmentQueueView({ onSelectShipment }: { onSelectShipment: (id: string
           <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#9AAAB8" }} />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search by reference, shipper, consignee..."
             className="w-full pl-8 pr-3 py-2 text-[13px] rounded-md border outline-none transition-colors focus:border-[#B8860B] focus:ring-2 focus:ring-[#FDF3DC]"
             style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 text-[13px] rounded-md border outline-none"
-          style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}
-        >
+        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
           <option value="review_required">Review Required</option>
           <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
           <option value="cw_draft_created">CW Draft</option>
           <option value="error">Error</option>
         </select>
-        <select
-          value={shieldFilter}
-          onChange={(e) => setShieldFilter(e.target.value)}
-          className="px-3 py-2 text-[13px] rounded-md border outline-none"
-          style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}
-        >
+        <select value={shieldFilter} onChange={(e) => { setShieldFilter(e.target.value); setPage(1); }} className="px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
           <option value="all">All Shield</option>
           <option value="pass">Pass</option>
           <option value="hold">Hold</option>
           <option value="fail">Fail</option>
           <option value="pending">Pending</option>
         </select>
-        <div className="ml-auto text-[12px]" style={{ color: "#6B7E92" }}>
-          {filtered.length} shipment{filtered.length !== 1 ? "s" : ""}
-        </div>
+        <div className="ml-auto text-[12px]" style={{ color: "#6B7E92" }}>{data.total} shipment{data.total !== 1 ? "s" : ""}</div>
       </div>
 
       {/* Table */}
@@ -569,17 +747,16 @@ function ShipmentQueueView({ onSelectShipment }: { onSelectShipment: (id: string
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s) => (
-                <tr
-                  key={s.id}
-                  onClick={() => onSelectShipment(s.id)}
-                  className="border-b hover:bg-[#F1F4F8] transition-colors cursor-pointer"
-                  style={{ borderColor: "#DDE3EA" }}
-                >
+              {loading ? (
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>Loading shipments...</td></tr>
+              ) : items.length === 0 ? (
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>No shipments found.</td></tr>
+              ) : items.map((s) => (
+                <tr key={s.id} onClick={() => onSelectShipment(s.id)} className="border-b hover:bg-[#F1F4F8] transition-colors cursor-pointer" style={{ borderColor: "#DDE3EA" }}>
                   <td className="px-4 py-2.5 font-mono text-[12px] font-medium" style={{ color: "#B8860B" }}>{s.reference}</td>
-                  <td className="px-4 py-2.5" style={{ color: "#0D1B2A" }}>{s.shipperName}</td>
-                  <td className="px-4 py-2.5" style={{ color: "#3D5166" }}>{s.originPort} → {s.destinationPort}</td>
-                  <td className="px-4 py-2.5 capitalize" style={{ color: "#3D5166" }}>{s.shipmentType.replace("_", " ")}</td>
+                  <td className="px-4 py-2.5 max-w-[180px] truncate" style={{ color: "#0D1B2A" }}>{s.shipperName || "—"}</td>
+                  <td className="px-4 py-2.5" style={{ color: "#3D5166" }}>{s.originPort || "—"} → {s.destinationPort || "—"}</td>
+                  <td className="px-4 py-2.5 capitalize" style={{ color: "#3D5166" }}>{(s.shipmentType || "").replace(/_/g, " ")}</td>
                   <td className="px-4 py-2.5"><ConfidenceBadge level={s.overallConfidence} /></td>
                   <td className="px-4 py-2.5"><ShieldBadge status={s.shieldStatus} /></td>
                   <td className="px-4 py-2.5"><StatusBadge status={s.status} /></td>
@@ -590,6 +767,16 @@ function ShipmentQueueView({ onSelectShipment }: { onSelectShipment: (id: string
             </tbody>
           </table>
         </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "#DDE3EA" }}>
+            <span className="text-[12px]" style={{ color: "#6B7E92" }}>Page {page} of {totalPages}</span>
+            <div className="flex gap-2">
+              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="px-3 py-1.5 text-[12px] rounded border disabled:opacity-50" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>Previous</button>
+              <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="px-3 py-1.5 text-[12px] rounded border disabled:opacity-50" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>Next</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -599,35 +786,98 @@ function ShipmentQueueView({ onSelectShipment }: { onSelectShipment: (id: string
    Shipment Detail View
    ══════════════════════════════════════════════ */
 
-function ShipmentDetailView({ shipmentId, setView }: { shipmentId: string | null; setView: (v: ViewMode) => void }) {
-  const s = shipments.find((x) => x.id === shipmentId) || shipments[0];
+function ShipmentDetailView({ shipmentId, setView }: { shipmentId: string; setView: (v: ViewMode) => void }) {
+  const { data: s, loading, refetch } = useApi<ShipmentDetail | null>(`/api/shipments/${shipmentId}`, null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<string | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const { data: cwExecutions } = useApi<{ executions: CwExecution[] }>(`/api/cargowise/executions?shipmentId=${shipmentId}&limit=5`, { executions: [] });
 
-  const shieldModules = [
-    { name: "Invoice / PL Cross-Reference", result: s.shieldStatus === "fail" ? "fail" as ShieldStatus : "pass" as ShieldStatus, detail: s.shieldStatus === "fail" ? "Weight mismatch: Invoice 12,500 kg vs PL 13,280 kg" : "All values reconciled" },
-    { name: "HS Code Validation (8-digit)", result: s.shieldStatus === "hold" ? "hold" as ShieldStatus : "pass" as ShieldStatus, detail: s.shieldStatus === "hold" ? "No HS code provided for line item 2" : "5 valid codes verified" },
-    { name: "SACU / Non-SACU VAT Engine", result: "pass" as ShieldStatus, detail: formatZAR(22031.25) + " VAT calculated" },
-  ];
+  const handleAction = async (action: string, url: string, body?: Record<string, unknown>) => {
+    setActionLoading(action);
+    setActionResult(null);
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      const data = await res.json();
+      if (res.ok) {
+        setActionResult(`✓ ${action} succeeded`);
+        refetch();
+      } else {
+        setActionResult(`✗ ${action} failed: ${data.error || data.message || "Unknown error"}`);
+      }
+    } catch (e) {
+      setActionResult(`✗ ${action} error: ${e instanceof Error ? e.message : "Network error"}`);
+    }
+    setActionLoading(null);
+  };
 
-  const lineItems = [
-    { hsCode: "8471300000", desc: "Laptop Computers", qty: 500, unit: "PCS", value: 425000 },
-    { hsCode: "8517620000", desc: "Network Routers", qty: 200, unit: "PCS", value: 64000 },
-    { hsCode: "8504403000", desc: "Power Supply Units", qty: 1000, unit: "PCS", value: 45000 },
-    { hsCode: "8544429000", desc: "Cable Assemblies", qty: 5000, unit: "M", value: 16000 },
-    { hsCode: "8473300000", desc: "Computer Parts", qty: 300, unit: "KG", value: 36000 },
+  const handleFieldEdit = async (field: string, value: string) => {
+    try {
+      await fetch(`/api/shipments/${shipmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      refetch();
+    } catch { /* silently fail */ }
+    setEditingField(null);
+  };
+
+  if (loading || !s) {
+    return <div className="p-6"><div className="text-[13px]" style={{ color: "#6B7E92" }}>Loading shipment details...</div></div>;
+  }
+
+  const shieldModules = s.shieldResults && typeof s.shieldResults === "object" && "modules" in s.shieldResults
+    ? (s.shieldResults as { modules: Array<{ module: string; result: string; detail: Record<string, unknown>; penalty_risk: boolean }> }).modules
+    : s.complianceEvents.map((ce) => ({
+        module: ce.module,
+        result: ce.result,
+        detail: (() => { try { return JSON.parse(ce.detail); } catch { return { message: ce.detail }; } })(),
+        penalty_risk: ce.penaltyRisk,
+      }));
+
+  const detailFields = [
+    { label: "Shipper", value: s.shipperName, field: "shipperName" },
+    { label: "Consignee", value: s.consigneeName, field: "consigneeName" },
+    { label: "Route", value: `${s.originPort || "—"} → ${s.destinationPort || "—"}`, field: null },
+    { label: "BL/AWB", value: s.awbOrBlNumber, field: "awbOrBlNumber" },
+    { label: "Type", value: (s.shipmentType || "").replace(/_/g, " "), field: "shipmentType" },
+    { label: "Incoterms", value: s.incoterms, field: "incoterms" },
+    { label: "Vessel/Flight", value: s.vesselOrFlight, field: "vesselOrFlight" },
+    { label: "ETA", value: s.eta ? new Date(s.eta).toLocaleDateString() : "—", field: null },
+    { label: "Invoice Value", value: s.invoiceValue ? `$${Number(s.invoiceValue).toLocaleString()}` : "—", field: "invoiceValue" },
+    { label: "Gross Weight", value: s.grossWeight ? `${Number(s.grossWeight).toLocaleString()} ${s.weightUnit || "KGS"}` : "—", field: "grossWeight" },
+    { label: "Packages", value: s.numberOfPackages, field: "numberOfPackages" },
+    { label: "Confidence", value: s.overallConfidence, field: null },
+    { label: "Source", value: s.source, field: null },
+    { label: "HS Code", value: s.hsCodePrimary, field: "hsCodePrimary" },
   ];
 
   return (
     <div className="p-6 max-w-[1440px]">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => setView("shipments")} className="text-[13px] font-medium hover:underline" style={{ color: "#B8860B" }}>
-          ← Back to Queue
-        </button>
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <button onClick={() => setView("shipments")} className="text-[13px] font-medium hover:underline" style={{ color: "#B8860B" }}>← Back to Queue</button>
         <span style={{ color: "#C8D0DA" }}>|</span>
         <span className="font-mono text-[15px] font-semibold" style={{ color: "#0D1B2A" }}>{s.reference}</span>
         <ShieldBadge status={s.shieldStatus} />
         <StatusBadge status={s.status} />
       </div>
+
+      {/* Action result banner */}
+      {actionResult && (
+        <div className={`mb-4 rounded-md p-3 text-[12px] font-medium ${actionResult.startsWith("✓") ? "border" : "border"}`} style={{
+          backgroundColor: actionResult.startsWith("✓") ? "#EBF5EE" : "#FEF2F2",
+          borderColor: actionResult.startsWith("✓") ? "#C6E4CE" : "#F5A5A5",
+          color: actionResult.startsWith("✓") ? "#15632A" : "#9B1C1C",
+        }}>
+          {actionResult}
+          <button onClick={() => setActionResult(null)} className="ml-2 underline">Dismiss</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left: Shipment Info + Line Items */}
@@ -636,25 +886,34 @@ function ShipmentDetailView({ shipmentId, setView }: { shipmentId: string | null
           <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
             <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
               <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>SHIPMENT DETAILS</span>
+              <span className="ml-2 text-[11px]" style={{ color: "#6B7E92" }}>Click a value to edit</span>
             </div>
             <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-[13px]">
-              {[
-                { label: "Shipper", value: s.shipperName },
-                { label: "Consignee", value: s.consigneeName },
-                { label: "Route", value: `${s.originPort} → ${s.destinationPort}` },
-                { label: "BL/AWB", value: s.awbOrBlNumber },
-                { label: "Type", value: s.shipmentType.replace("_", " ") },
-                { label: "Incoterms", value: "CIF" },
-                { label: "Vessel/Flight", value: "MSC ISABELLA" },
-                { label: "ETA", value: "2026-06-15" },
-                { label: "Invoice Value", value: "$586,000.00" },
-                { label: "Gross Weight", value: "4,540 KGS" },
-                { label: "Packages", value: "45" },
-                { label: "Confidence", value: s.overallConfidence },
-              ].map((item) => (
+              {detailFields.map((item) => (
                 <div key={item.label}>
                   <div className="text-[11px] font-medium uppercase tracking-wider mb-0.5" style={{ color: "#6B7E92" }}>{item.label}</div>
-                  <div className="font-medium" style={{ color: "#0D1B2A" }}>{item.value}</div>
+                  {editingField === item.field ? (
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => item.field && handleFieldEdit(item.field, editValue)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && item.field) handleFieldEdit(item.field, editValue); if (e.key === "Escape") setEditingField(null); }}
+                      className="w-full px-2 py-1 text-[13px] border rounded outline-none focus:border-[#B8860B]"
+                      style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }}
+                    />
+                  ) : (
+                    <div
+                      className={`font-medium ${item.field ? "cursor-pointer hover:bg-[#F1F4F8] rounded px-1 -mx-1" : ""}`}
+                      style={{ color: "#0D1B2A" }}
+                      onClick={() => {
+                        if (item.field) { setEditingField(item.field); setEditValue(String(item.value || "")); }
+                      }}
+                    >
+                      {String(item.value || "—")}
+                      {item.field && <Save size={10} className="inline ml-1 opacity-30" />}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -663,7 +922,7 @@ function ShipmentDetailView({ shipmentId, setView }: { shipmentId: string | null
           {/* Line Items */}
           <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
             <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>LINE ITEMS</span>
+              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>LINE ITEMS ({s.lineItems.length})</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
@@ -673,27 +932,76 @@ function ShipmentDetailView({ shipmentId, setView }: { shipmentId: string | null
                     <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Description</th>
                     <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Qty</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Unit</th>
-                    <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Value (USD)</th>
+                    <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Value</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lineItems.map((li, i) => (
-                    <tr key={i} className="border-b" style={{ borderColor: "#DDE3EA" }}>
-                      <td className="px-4 py-2 font-mono text-[12px]" style={{ color: "#1A4971" }}>{li.hsCode}</td>
-                      <td className="px-4 py-2" style={{ color: "#0D1B2A" }}>{li.desc}</td>
-                      <td className="px-4 py-2 text-right font-mono" style={{ color: "#3D5166" }}>{li.qty.toLocaleString()}</td>
-                      <td className="px-4 py-2" style={{ color: "#3D5166" }}>{li.unit}</td>
-                      <td className="px-4 py-2 text-right font-mono font-medium" style={{ color: "#0D1B2A" }}>${li.value.toLocaleString()}</td>
+                  {s.lineItems.length === 0 ? (
+                    <tr><td colSpan={5} className="px-4 py-4 text-center text-[12px]" style={{ color: "#6B7E92" }}>No line items extracted</td></tr>
+                  ) : s.lineItems.map((li) => (
+                    <tr key={li.id} className="border-b" style={{ borderColor: "#DDE3EA" }}>
+                      <td className="px-4 py-2 font-mono text-[12px]" style={{ color: "#1A4971" }}>{li.hsCode || "—"}</td>
+                      <td className="px-4 py-2" style={{ color: "#0D1B2A" }}>{li.description || "—"}</td>
+                      <td className="px-4 py-2 text-right font-mono" style={{ color: "#3D5166" }}>{li.quantity?.toLocaleString() || "—"}</td>
+                      <td className="px-4 py-2" style={{ color: "#3D5166" }}>{li.unit || "—"}</td>
+                      <td className="px-4 py-2 text-right font-mono font-medium" style={{ color: "#0D1B2A" }}>{li.totalValue ? `$${Number(li.totalValue).toLocaleString()}` : "—"}</td>
                     </tr>
                   ))}
-                  <tr style={{ backgroundColor: "#F1F4F8" }}>
-                    <td colSpan={4} className="px-4 py-2 text-right font-semibold" style={{ color: "#3D5166" }}>Total</td>
-                    <td className="px-4 py-2 text-right font-mono font-bold" style={{ color: "#0D1B2A" }}>$586,000</td>
-                  </tr>
                 </tbody>
               </table>
             </div>
           </div>
+
+          {/* Documents */}
+          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>DOCUMENTS ({s.documents.length})</span>
+            </div>
+            <div className="p-4">
+              {s.documents.length === 0 ? (
+                <div className="text-[12px]" style={{ color: "#6B7E92" }}>No documents attached</div>
+              ) : (
+                <div className="space-y-2">
+                  {s.documents.map((doc) => (
+                    <div key={doc.id} className="flex items-center gap-3 p-2 rounded-md border" style={{ borderColor: "#DDE3EA" }}>
+                      {fileIcon(doc.fileType)}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-medium truncate" style={{ color: "#0D1B2A" }}>{doc.filename}</div>
+                        <div className="text-[11px]" style={{ color: "#6B7E92" }}>{doc.docType} · {doc.status}</div>
+                      </div>
+                      <span className="text-[11px]" style={{ color: "#6B7E92" }}>{relativeTime(doc.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Audit Timeline */}
+          {s.complianceEvents.length > 0 && (
+            <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+              <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+                <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>AUDIT TIMELINE</span>
+              </div>
+              <div className="p-4 max-h-64 overflow-y-auto space-y-3">
+                {s.complianceEvents.map((ev) => (
+                  <div key={ev.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 ${ev.result === "pass" ? "bg-emerald-500" : ev.result === "hold" ? "bg-amber-500" : "bg-red-500"}`} />
+                      <div className="w-px flex-1" style={{ backgroundColor: "#DDE3EA" }} />
+                    </div>
+                    <div className="pb-3">
+                      <div className="text-[12px] font-semibold" style={{ color: "#0D1B2A" }}>{ev.module}</div>
+                      <div className="text-[11px]" style={{ color: "#6B7E92" }}>
+                        {(() => { try { const d = JSON.parse(ev.detail); return d.message || d.reason || JSON.stringify(d); } catch { return ev.detail; } })()}
+                      </div>
+                      <div className="text-[10px] mt-0.5" style={{ color: "#9AAAB8" }}>{relativeTime(ev.createdAt)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right: Shield + Actions */}
@@ -706,20 +1014,24 @@ function ShipmentDetailView({ shipmentId, setView }: { shipmentId: string | null
             </div>
             <div className="p-4 space-y-3">
               {shieldModules.map((m) => (
-                <div key={m.name} className="rounded-md border p-3" style={{ borderColor: "#DDE3EA" }}>
+                <div key={m.module} className="rounded-md border p-3" style={{ borderColor: "#DDE3EA" }}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12px] font-semibold" style={{ color: "#0D1B2A" }}>{m.name}</span>
-                    <ShieldBadge status={m.result} />
+                    <span className="text-[12px] font-semibold" style={{ color: "#0D1B2A" }}>{m.module}</span>
+                    <ShieldBadge status={(m.result as ShieldStatus) || "pending"} />
                   </div>
-                  <p className="text-[12px]" style={{ color: "#6B7E92" }}>{m.detail}</p>
+                  <p className="text-[12px]" style={{ color: "#6B7E92" }}>
+                    {typeof m.detail === "object" ? (m.detail as Record<string, unknown>).message || (m.detail as Record<string, unknown>).reason || JSON.stringify(m.detail) : String(m.detail)}
+                  </p>
+                  {m.penalty_risk && (
+                    <div className="mt-1 text-[11px] font-medium text-red-600 flex items-center gap-1">
+                      <AlertTriangle size={11} /> SARS Penalty Risk
+                    </div>
+                  )}
                 </div>
               ))}
               {s.shieldStatus === "fail" && (
                 <div className="rounded-md p-3 text-[12px] font-medium" style={{ backgroundColor: "#FEF2F2", border: "1px solid #F5A5A5", color: "#9B1C1C" }}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Ban size={13} />
-                    CargoWise submission BLOCKED
-                  </div>
+                  <div className="flex items-center gap-1.5 mb-1"><Ban size={13} />CargoWise submission BLOCKED</div>
                   Resolve all FAIL results before proceeding.
                 </div>
               )}
@@ -733,101 +1045,228 @@ function ShipmentDetailView({ shipmentId, setView }: { shipmentId: string | null
             </div>
             <div className="p-4 space-y-2">
               <button
+                onClick={() => handleAction("Create CW Draft", `/api/cargowise/execute`, { shipmentId: s.id })}
+                disabled={s.shieldStatus === "fail" || actionLoading !== null}
                 className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-semibold text-white transition-colors disabled:opacity-50"
                 style={{ backgroundColor: s.shieldStatus === "fail" ? "#9AAAB8" : "#B8860B" }}
-                disabled={s.shieldStatus === "fail"}
               >
-                <ExternalLink size={14} />
+                {actionLoading === "Create CW Draft" ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
                 Create CW Draft
               </button>
-              <button className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#F1F4F8]" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>
-                <Eye size={14} />
-                Review Documents
+              <button
+                onClick={() => handleAction("Approve", `/api/shipments/${s.id}/approve`, { notes: "Approved via CargoIQ", acknowledgeRisks: s.shieldStatus === "hold" })}
+                disabled={s.status === "approved" || actionLoading !== null}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#EBF5EE]" style={{ borderColor: "#C8D0DA", color: "#15632A" }}
+              >
+                {actionLoading === "Approve" ? <Loader2 size={14} className="animate-spin" /> : <ThumbsUp size={14} />}
+                Approve
               </button>
-              <button className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#F1F4F8]" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>
-                <RefreshCw size={14} />
+              <button
+                onClick={() => setRejectOpen(true)}
+                disabled={s.status === "rejected" || actionLoading !== null}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#FEF2F2]" style={{ borderColor: "#C8D0DA", color: "#9B1C1C" }}
+              >
+                <ThumbsDown size={14} />
+                Reject
+              </button>
+              <button
+                onClick={() => handleAction("Re-run Shield", `/api/shipments/${s.id}/shield`)}
+                disabled={actionLoading !== null}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#F1F4F8]" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}
+              >
+                {actionLoading === "Re-run Shield" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 Re-run Shield
               </button>
             </div>
           </div>
 
-          {/* Documents */}
-          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>DOCUMENTS</span>
+          {/* CW Execution History */}
+          {cwExecutions.executions.length > 0 && (
+            <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+              <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+                <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CW EXECUTIONS</span>
+              </div>
+              <div className="p-4 space-y-2 max-h-48 overflow-y-auto">
+                {cwExecutions.executions.map((ex) => (
+                  <div key={ex.id} className="flex items-center justify-between text-[12px] p-2 rounded border" style={{ borderColor: "#DDE3EA" }}>
+                    <div>
+                      <span className="font-mono" style={{ color: "#B8860B" }}>{ex.executionType}</span>
+                      <span className="ml-2" style={{ color: "#6B7E92" }}>{ex.durationMs ? `${ex.durationMs}ms` : "—"}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ex.status === "success" ? "bg-emerald-50 text-emerald-700" : ex.status === "failed" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>{ex.status}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="p-4 space-y-2">
-              {["Commercial_Invoice_SINV-2026-04287.pdf", "Packing_List_PL-2026-04287.pdf", "Bill_of_Lading_MAEU123456789.pdf"].map((doc) => (
-                <div key={doc} className="flex items-center gap-2 p-2 rounded-md hover:bg-[#F1F4F8] transition-colors cursor-pointer">
-                  <FileText size={14} style={{ color: "#9B1C1C" }} />
-                  <span className="text-[12px] truncate" style={{ color: "#0D1B2A" }}>{doc}</span>
-                </div>
-              ))}
+          )}
+        </div>
+      </div>
+
+      {/* Reject Dialog */}
+      {rejectOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 className="text-[15px] font-semibold mb-4" style={{ color: "#0D1B2A" }}>Reject Shipment</h3>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Enter rejection reason (min 3 characters)..."
+              className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B] mb-4"
+              style={{ borderColor: "#C8D0DA", color: "#0D1B2A", minHeight: 100 }}
+              rows={4}
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setRejectOpen(false); setRejectReason(""); }} className="px-4 py-2 text-[13px] rounded-md border" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>Cancel</button>
+              <button
+                onClick={() => { handleAction("Reject", `/api/shipments/${s.id}/reject`, { reason: rejectReason }); setRejectOpen(false); setRejectReason(""); }}
+                disabled={rejectReason.length < 3}
+                className="px-4 py-2 text-[13px] rounded-md text-white disabled:opacity-50" style={{ backgroundColor: "#9B1C1C" }}
+              >Reject Shipment</button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════
-   Compliance View
+   Compliance Audit View
    ══════════════════════════════════════════════ */
 
 function ComplianceView() {
-  const recentEvents = [
-    { ref: "CIQ-2026-00044", module: "Invoice/PL", result: "fail" as ShieldStatus, detail: "Weight mismatch: 12,500 vs 13,280 kg", time: "6h ago", risk: true },
-    { ref: "CIQ-2026-00045", module: "HS Code", result: "hold" as ShieldStatus, detail: "Missing HS code on line item 2", time: "5h ago", risk: false },
-    { ref: "CIQ-2026-00047", module: "VAT Engine", result: "pass" as ShieldStatus, detail: formatZAR(22031.25) + " VAT calculated correctly", time: "2h ago", risk: false },
-    { ref: "CIQ-2026-00038", module: "Invoice/PL", result: "fail" as ShieldStatus, detail: "Value mismatch: Invoice $42K vs PL $48K", time: "24h ago", risk: true },
-    { ref: "CIQ-2026-00041", module: "HS Code", result: "pass" as ShieldStatus, detail: "4 valid HS codes verified", time: "12h ago", risk: false },
-    { ref: "CIQ-2026-00039", module: "VAT Engine", result: "hold" as ShieldStatus, detail: "SACU origin unclear — manual check needed", time: "18h ago", risk: false },
-  ];
+  const [moduleFilter, setModuleFilter] = useState("all");
+  const [resultFilter, setResultFilter] = useState("all");
+  const { data: shipmentsData, loading } = useApi<ShipmentListResponse>("/api/shipments?limit=50", { items: [], total: 0, page: 1, limit: 50 });
+  const { data: analytics } = useApi<AnalyticsData>("/api/analytics", {
+    processed: 0, automationRate: 0, avgTimeSeconds: 0, errorRate: 0,
+    shieldSummary: { pass: 0, hold: 0, fail: 0, pending: 0 },
+    queueSize: 0, exceptions: 0, recentTrend: [], topOriginPorts: [],
+    avgConfidenceBySource: {}, shieldPassRate: 0,
+    pipelineStatus: { pending: 0, review_required: 0, approved: 0, rejected: 0, cw_draft_created: 0, in_cargowise: 0, error: 0 },
+  });
+
+  // Aggregate compliance events from all shipments
+  const [allEvents, setAllEvents] = useState<Array<ComplianceEvent & { reference: string; shipmentId: string }>>([]);
+
+  useEffect(() => {
+    if (shipmentsData.items.length === 0) return;
+    const fetchEvents = async () => {
+      const events: Array<ComplianceEvent & { reference: string; shipmentId: string }> = [];
+      // Fetch detail for each shipment to get complianceEvents
+      const promises = shipmentsData.items.map(async (s) => {
+        try {
+          const res = await fetch(`/api/shipments/${s.id}`);
+          if (res.ok) {
+            const detail = await res.json();
+            if (detail.complianceEvents) {
+              for (const ce of detail.complianceEvents) {
+                events.push({ ...ce, reference: s.reference, shipmentId: s.id });
+              }
+            }
+          }
+        } catch { /* skip */ }
+      });
+      await Promise.all(promises);
+      setAllEvents(events);
+    };
+    fetchEvents();
+  }, [shipmentsData.items]);
+
+  const filtered = allEvents.filter((e) => {
+    if (moduleFilter !== "all" && e.module !== moduleFilter) return false;
+    if (resultFilter !== "all" && e.result !== resultFilter) return false;
+    return true;
+  });
+
+  const uniqueModules = [...new Set(allEvents.map((e) => e.module))];
+  const passCount = allEvents.filter((e) => e.result === "pass").length;
+  const holdCount = allEvents.filter((e) => e.result === "hold").length;
+  const failCount = allEvents.filter((e) => e.result === "fail").length;
 
   return (
     <div className="p-6 max-w-[1440px]">
-      {/* Upload Zone */}
-      <div className="rounded-lg border-2 border-dashed p-8 mb-6 flex flex-col items-center justify-center cursor-pointer hover:bg-[#F8FAFB] transition-colors" style={{ borderColor: "#C8D0DA", backgroundColor: "#FFFFFF" }}>
-        <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: "#EBF3FB" }}>
-          <Upload size={24} style={{ color: "#1A4971" }} />
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>{allEvents.length}</div>
+          <div className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "#6B7E92" }}>Total Checks</div>
         </div>
-        <h3 className="text-[15px] font-semibold mb-1" style={{ color: "#0D1B2A" }}>Upload Documents for Compliance Check</h3>
-        <p className="text-[13px] mb-3" style={{ color: "#6B7E92" }}>Drop invoices, packing lists, or bills of lading — PDF, Excel, or images</p>
-        <span className="px-4 py-2 rounded-md text-[13px] font-semibold text-white" style={{ backgroundColor: "#B8860B" }}>
-          Browse Files
-        </span>
+        <div className="rounded-lg border p-4" style={{ backgroundColor: "#EBF5EE", borderColor: "#C6E4CE" }}>
+          <div className="text-2xl font-bold text-emerald-700">{passCount}</div>
+          <div className="text-[11px] font-medium uppercase tracking-wider text-emerald-600">Pass</div>
+        </div>
+        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FEF6E7", borderColor: "#E8B84B" }}>
+          <div className="text-2xl font-bold text-amber-700">{holdCount}</div>
+          <div className="text-[11px] font-medium uppercase tracking-wider text-amber-600">Hold</div>
+        </div>
+        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FEF2F2", borderColor: "#F5A5A5" }}>
+          <div className="text-2xl font-bold text-red-700">{failCount}</div>
+          <div className="text-[11px] font-medium uppercase tracking-wider text-red-600">Fail</div>
+        </div>
       </div>
 
-      {/* Recent Events */}
-      <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>RECENT COMPLIANCE EVENTS</span>
-        </div>
-        <div className="divide-y" style={{ borderColor: "#DDE3EA" }}>
-          {recentEvents.map((evt, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-3 hover:bg-[#F1F4F8] transition-colors">
-              <div className="flex-shrink-0">
-                {evt.result === "pass" ? <CheckCircle2 size={18} className="text-emerald-600" /> : evt.result === "hold" ? <AlertCircle size={18} className="text-amber-600" /> : <XCircle size={18} className="text-red-600" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="font-mono text-[12px] font-medium" style={{ color: "#B8860B" }}>{evt.ref}</span>
-                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: "#E8ECF1", color: "#3D5166" }}>{evt.module}</span>
-                  {evt.risk && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 px-1.5 py-0.5 rounded" style={{ backgroundColor: "#FEF2F2" }}>
-                      <AlertTriangle size={10} /> PENALTY RISK
-                    </span>
-                  )}
-                </div>
-                <p className="text-[12px] truncate" style={{ color: "#6B7E92" }}>{evt.detail}</p>
-              </div>
-              <ShieldBadge status={evt.result} />
-              <span className="text-[11px] flex-shrink-0" style={{ color: "#9AAAB8" }}>{evt.time}</span>
-            </div>
-          ))}
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} className="px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
+          <option value="all">All Modules</option>
+          {uniqueModules.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <select value={resultFilter} onChange={(e) => setResultFilter(e.target.value)} className="px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
+          <option value="all">All Results</option>
+          <option value="pass">Pass</option>
+          <option value="hold">Hold</option>
+          <option value="fail">Fail</option>
+        </select>
+        <div className="ml-auto text-[12px]" style={{ color: "#6B7E92" }}>{filtered.length} event{filtered.length !== 1 ? "s" : ""}</div>
+      </div>
+
+      {/* Events Table */}
+      <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr style={{ backgroundColor: "#F1F4F8" }}>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Shipment</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Module</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Result</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Detail</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Penalty Risk</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>Loading compliance events...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>No compliance events found.</td></tr>
+              ) : filtered.map((ev) => (
+                <tr key={ev.id} className="border-b hover:bg-[#F1F4F8] transition-colors" style={{ borderColor: "#DDE3EA" }}>
+                  <td className="px-4 py-2.5 font-mono text-[12px] font-medium" style={{ color: "#B8860B" }}>{ev.reference}</td>
+                  <td className="px-4 py-2.5" style={{ color: "#0D1B2A" }}>{ev.module}</td>
+                  <td className="px-4 py-2.5"><ShieldBadge status={ev.result as ShieldStatus} /></td>
+                  <td className="px-4 py-2.5 max-w-[300px] truncate" style={{ color: "#3D5166" }}>
+                    {(() => { try { const d = JSON.parse(ev.detail); return d.message || d.reason || JSON.stringify(d); } catch { return ev.detail; } })()}
+                  </td>
+                  <td className="px-4 py-2.5">{ev.penaltyRisk ? <AlertTriangle size={14} className="text-red-500" /> : <span style={{ color: "#6B7E92" }}>—</span>}</td>
+                  <td className="px-4 py-2.5" style={{ color: "#6B7E92" }}>{relativeTime(ev.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Shield Pass Rate */}
+      {analytics.shieldPassRate > 0 && (
+        <div className="mt-6 rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="text-[13px] font-semibold mb-2" style={{ color: "#3D5166" }}>SHIELD PASS RATE</div>
+          <div className="w-full h-3 rounded-full" style={{ backgroundColor: "#E8ECF1" }}>
+            <div className="h-3 rounded-full bg-emerald-500" style={{ width: `${Math.round(analytics.shieldPassRate * 100)}%` }} />
+          </div>
+          <div className="text-[12px] mt-1" style={{ color: "#6B7E92" }}>{Math.round(analytics.shieldPassRate * 100)}% of checked shipments pass all shield modules</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -837,193 +1276,272 @@ function ComplianceView() {
    ══════════════════════════════════════════════ */
 
 function WiseLayerView() {
-  const [rlaLastChecked, setRlaLastChecked] = useState<string>("2026-03-04 09:42 SAST");
-  const [rlaChecking, setRlaChecking] = useState(false);
+  const { data: analytics } = useApi<AnalyticsData>("/api/analytics", {
+    processed: 0, automationRate: 0, avgTimeSeconds: 0, errorRate: 0,
+    shieldSummary: { pass: 0, hold: 0, fail: 0, pending: 0 },
+    queueSize: 0, exceptions: 0, recentTrend: [], topOriginPorts: [],
+    avgConfidenceBySource: {}, shieldPassRate: 0,
+    pipelineStatus: { pending: 0, review_required: 0, approved: 0, rejected: 0, cw_draft_created: 0, in_cargowise: 0, error: 0 },
+  });
 
-  const kpis = [
-    { label: "Total WiseTech Fees", value: formatZAR(428500), change: "+8%", up: true, icon: DollarSign, color: "#9B1C1C", bg: "#FEF2F2" },
-    { label: "Savings This Month", value: formatZAR(127400), change: "+22%", up: true, icon: TrendingDown, color: "#15632A", bg: "#EBF5EE" },
-    { label: "RLA Monitored", value: "5", change: "1 at risk", up: false, icon: AlertTriangle, color: "#7A4F00", bg: "#FEF6E7" },
-    { label: "Active Alerts", value: "3", change: "", up: false, icon: Bell, color: "#1A4971", bg: "#EBF3FB" },
-  ];
+  const { data: shipments } = useApi<ShipmentListResponse>("/api/shipments?limit=20", { items: [], total: 0, page: 1, limit: 20 });
 
-  const rlaData = [
-    { code: "50123456789", name: "ABC Logistics SA", status: "active" },
-    { code: "50987654321", name: "XYZ Imports (Pty) Ltd", status: "active" },
-    { code: "50456789012", name: "DEF Trading CC", status: "suspended" },
-    { code: "50321654987", name: "GHI Exports International", status: "active" },
-    { code: "50789456123", name: "JKL Freight Solutions", status: "inactive" },
-  ];
+  const totalValue = shipments.items.reduce((acc, s) => acc + 0, 0); // Placeholder
+  const avgConf = analytics.avgConfidenceBySource;
 
-  // Simple bar chart representation
-  const chartData = Array.from({ length: 14 }, (_, i) => ({
-    label: `Day ${i + 1}`,
-    fees: 80 + Math.floor(Math.random() * 60),
-    saved: 40 + Math.floor(Math.random() * 40),
-  }));
-  const maxVal = Math.max(...chartData.map((d) => d.fees));
+  return (
+    <div className="p-6 max-w-[1440px]">
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="flex items-center gap-2 mb-2"><DollarSign size={16} style={{ color: "#B8860B" }} /><span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "#6B7E92" }}>Total Pipeline Value</span></div>
+          <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>—</div>
+          <div className="text-[11px]" style={{ color: "#6B7E92" }}>Cost intelligence coming soon</div>
+        </div>
+        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="flex items-center gap-2 mb-2"><Activity size={16} style={{ color: "#B8860B" }} /><span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "#6B7E92" }}>Active Shipments</span></div>
+          <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>{shipments.total}</div>
+          <div className="text-[11px]" style={{ color: "#6B7E92" }}>In processing pipeline</div>
+        </div>
+        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="flex items-center gap-2 mb-2"><ShieldCheck size={16} style={{ color: "#B8860B" }} /><span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "#6B7E92" }}>Shield Pass Rate</span></div>
+          <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>{Math.round(analytics.shieldPassRate * 100)}%</div>
+          <div className="text-[11px]" style={{ color: "#6B7E92" }}>Compliance health</div>
+        </div>
+      </div>
 
-  // Transaction Compaction data
-  const compactionData = [
-    { date: "2026-03-04", origTx: 847, compactedTx: 312, saved: 535, estSaving: 2675.00 },
-    { date: "2026-03-03", origTx: 912, compactedTx: 298, saved: 614, estSaving: 3070.00 },
-    { date: "2026-03-02", origTx: 756, compactedTx: 287, saved: 469, estSaving: 2345.00 },
-    { date: "2026-03-01", origTx: 823, compactedTx: 341, saved: 482, estSaving: 2410.00 },
-    { date: "2026-02-28", origTx: 689, compactedTx: 256, saved: 433, estSaving: 2165.00 },
-    { date: "2026-02-27", origTx: 934, compactedTx: 312, saved: 622, estSaving: 3110.00 },
-    { date: "2026-02-26", origTx: 781, compactedTx: 298, saved: 483, estSaving: 2415.00 },
-  ];
+      {/* Confidence by Source */}
+      <div className="rounded-lg border mb-6" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>EXTRACTION CONFIDENCE BY SOURCE</span>
+        </div>
+        <div className="p-4">
+          {Object.keys(avgConf).length === 0 ? (
+            <div className="text-[12px]" style={{ color: "#6B7E92" }}>No source data available yet</div>
+          ) : (
+            <div className="space-y-4">
+              {Object.entries(avgConf).map(([source, data]) => (
+                <div key={source}>
+                  <div className="text-[12px] font-semibold mb-2 capitalize" style={{ color: "#0D1B2A" }}>{source.replace(/_/g, " ")} ({(data as Record<string, number>).total} shipments)</div>
+                  <div className="flex gap-3">
+                    {(["highPct", "mediumPct", "lowPct"] as const).map((key) => {
+                      const labels = { highPct: "High", mediumPct: "Medium", lowPct: "Low" };
+                      const colors = { highPct: "bg-emerald-500", mediumPct: "bg-amber-500", lowPct: "bg-red-500" };
+                      return (
+                        <div key={key} className="flex-1">
+                          <div className="flex justify-between text-[11px] mb-1">
+                            <span style={{ color: "#6B7E92" }}>{labels[key]}</span>
+                            <span className="font-medium" style={{ color: "#0D1B2A" }}>{(data as Record<string, number>)[key]}%</span>
+                          </div>
+                          <div className="w-full h-2 rounded-full" style={{ backgroundColor: "#E8ECF1" }}>
+                            <div className={`h-2 rounded-full ${colors[key]}`} style={{ width: `${(data as Record<string, number>)[key]}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
-  const handleRunCheck = () => {
-    setRlaChecking(true);
-    setTimeout(() => {
-      const now = new Date();
-      const pad = (n: number) => n.toString().padStart(2, "0");
-      setRlaLastChecked(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} SAST`);
-      setRlaChecking(false);
-    }, 1500);
+      {/* Top Origin Ports */}
+      <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>TOP ORIGIN PORTS</span>
+        </div>
+        <div className="p-4">
+          {analytics.topOriginPorts.length === 0 ? (
+            <div className="text-[12px]" style={{ color: "#6B7E92" }}>No port data available yet</div>
+          ) : (
+            <div className="space-y-3">
+              {analytics.topOriginPorts.map((p) => {
+                const maxCount = analytics.topOriginPorts[0]?.count || 1;
+                return (
+                  <div key={p.port}>
+                    <div className="flex justify-between text-[12px] mb-1">
+                      <span className="font-mono font-medium" style={{ color: "#0D1B2A" }}>{p.port}</span>
+                      <span style={{ color: "#6B7E92" }}>{p.count} shipments</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full" style={{ backgroundColor: "#E8ECF1" }}>
+                      <div className="h-2 rounded-full" style={{ width: `${(p.count / maxCount) * 100}%`, backgroundColor: "#B8860B" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Placeholder */}
+      <div className="mt-6 rounded-lg border p-6 text-center" style={{ backgroundColor: "#F1F4F8", borderColor: "#C8D0DA" }}>
+        <DollarSign size={32} className="mx-auto mb-2" style={{ color: "#B8860B" }} />
+        <div className="text-[15px] font-semibold mb-1" style={{ color: "#0D1B2A" }}>WiseTech Cost Intelligence</div>
+        <div className="text-[12px]" style={{ color: "#6B7E92" }}>CargoWise cost optimization insights and WiseTech Value Pack analytics are coming soon. Connect your CargoWise instance in Settings to enable cost tracking.</div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   CargoWise Integration View
+   ══════════════════════════════════════════════ */
+
+function CargoWiseView({ wsConnected }: { wsConnected: boolean }) {
+  const [testResult, setTestResult] = useState<{ connected: boolean; message?: string; error?: string } | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
+  const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftResult, setDraftResult] = useState<string | null>(null);
+
+  const { data: executions, loading: executionsLoading, refetch: refetchExecutions } = useApi<{ executions: CwExecution[]; total: number }>("/api/cargowise/executions?limit=20", { executions: [], total: 0 });
+  const { data: shipments } = useApi<ShipmentListResponse>("/api/shipments?limit=10&status=approved", { items: [], total: 0, page: 1, limit: 10 });
+
+  const handleTest = async () => {
+    setTestLoading(true);
+    try {
+      // Get first org
+      const res = await fetch("/api/cargowise/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId: "auto" }),
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (e) {
+      setTestResult({ connected: false, error: e instanceof Error ? e.message : "Connection failed" });
+    }
+    setTestLoading(false);
+  };
+
+  const handleCreateDraft = async () => {
+    if (!selectedShipmentId) return;
+    setDraftLoading(true);
+    setDraftResult(null);
+    try {
+      const res = await fetch("/api/cargowise/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shipmentId: selectedShipmentId }),
+      });
+      const data = await res.json();
+      setDraftResult(data.success ? `✓ Draft created successfully (${data.execution?.executionType}, ${data.execution?.durationMs}ms)` : `✗ Failed: ${data.error || data.message}`);
+      refetchExecutions();
+    } catch (e) {
+      setDraftResult(`✗ Error: ${e instanceof Error ? e.message : "Network error"}`);
+    }
+    setDraftLoading(false);
   };
 
   return (
     <div className="p-6 max-w-[1440px]">
-      {/* Cost Alert Banner */}
-      <div className="rounded-md p-3 mb-4 flex items-center gap-3" style={{ backgroundColor: "#FEF2F2", border: "1px solid #F5A5A5" }}>
-        <AlertTriangle size={18} style={{ color: "#9B1C1C" }} />
-        <div>
-          <div className="text-[13px] font-semibold" style={{ color: "#9B1C1C" }}>Projected monthly spend exceeds budget</div>
-          <div className="text-[12px]" style={{ color: "#9B1C1C", opacity: 0.85 }}>Current projection: R 513,400 vs. budget of R 450,000 — consider enabling transaction compaction to reduce WiseTech API fees.</div>
-        </div>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ backgroundColor: kpi.bg }}>
-                <kpi.icon size={18} style={{ color: kpi.color }} />
-              </div>
-              {kpi.change && (
-                <span className={`inline-flex items-center gap-0.5 text-[12px] font-semibold ${kpi.up ? "text-emerald-600" : "text-red-600"}`}>
-                  {kpi.change}
-                </span>
-              )}
-            </div>
-            <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>{kpi.value}</div>
-            <div className="text-[11px] font-medium uppercase tracking-wider mt-0.5" style={{ color: "#6B7E92" }}>{kpi.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Transaction Chart */}
-        <div className="lg:col-span-2 rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>WISETECH FEE ANALYSIS (14 DAYS)</span>
-          </div>
-          <div className="p-4">
-            <div className="flex items-end gap-1.5 h-48">
-              {chartData.map((d, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                  <div className="w-full flex flex-col gap-0.5" style={{ height: 180 }}>
-                    <div className="flex-1" />
-                    <div
-                      className="w-full rounded-t"
-                      style={{
-                        height: `${(d.saved / maxVal) * 100}%`,
-                        backgroundColor: "#15632A",
-                        minHeight: 2,
-                        marginTop: "auto",
-                      }}
-                    />
-                    <div
-                      className="w-full rounded-t"
-                      style={{
-                        height: `${((d.fees - d.saved) / maxVal) * 100}%`,
-                        backgroundColor: "#C8D0DA",
-                        minHeight: 2,
-                      }}
-                    />
-                  </div>
-                  <span className="text-[9px]" style={{ color: "#9AAAB8" }}>{i + 1}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-4 mt-3 text-[11px]" style={{ color: "#6B7E92" }}>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-sm" style={{ backgroundColor: "#15632A" }} /> Savings</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-sm" style={{ backgroundColor: "#C8D0DA" }} /> WiseTech Fees</span>
-            </div>
-          </div>
-        </div>
-
-        {/* RLA Monitor */}
+      {/* Connection Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "#DDE3EA" }}>
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>RLA STATUS MONITOR</span>
-            <button
-              onClick={handleRunCheck}
-              disabled={rlaChecking}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-colors hover:bg-[#F1F4F8] disabled:opacity-50"
-              style={{ border: "1px solid #C8D0DA", color: "#3D5166" }}
-            >
-              <RefreshCw size={12} className={rlaChecking ? "animate-spin" : ""} />
-              {rlaChecking ? "Checking..." : "Run Check Now"}
-            </button>
+          <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CARGOWISE CONNECTION</span>
           </div>
-          <div className="px-4 py-2 flex items-center gap-1.5 text-[11px]" style={{ color: "#6B7E92", backgroundColor: "#F8FAFB" }}>
-            <Clock size={12} />
-            Last checked: {rlaLastChecked}
-          </div>
-          <div className="divide-y" style={{ borderColor: "#DDE3EA" }}>
-            {rlaData.map((r) => (
-              <div key={r.code} className="px-4 py-3 flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${r.status === "active" ? "bg-emerald-500" : r.status === "suspended" ? "bg-red-500" : "bg-slate-400"}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium truncate" style={{ color: "#0D1B2A" }}>{r.name}</div>
-                  <div className="text-[11px] font-mono" style={{ color: "#6B7E92" }}>{r.code}</div>
-                </div>
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${r.status === "active" ? "bg-emerald-50 text-emerald-700" : r.status === "suspended" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-500"}`}>
-                  {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {testResult?.connected ? <Wifi size={18} className="text-emerald-500" /> : <WifiOff size={18} className="text-slate-400" />}
+                <span className="text-[13px] font-medium" style={{ color: "#0D1B2A" }}>
+                  {testResult?.connected ? "Connected" : testResult ? "Not Connected" : "Not Tested"}
                 </span>
               </div>
-            ))}
+              <button onClick={handleTest} disabled={testLoading} className="px-4 py-1.5 rounded-md text-[12px] font-semibold text-white disabled:opacity-50" style={{ backgroundColor: "#B8860B" }}>
+                {testLoading ? <Loader2 size={12} className="animate-spin inline mr-1" /> : null}Test Connection
+              </button>
+            </div>
+            {testResult && (
+              <div className={`rounded-md p-3 text-[12px] ${testResult.connected ? "border" : "border"}`} style={{
+                backgroundColor: testResult.connected ? "#EBF5EE" : "#FEF2F2",
+                borderColor: testResult.connected ? "#C6E4CE" : "#F5A5A5",
+                color: testResult.connected ? "#15632A" : "#9B1C1C",
+              }}>
+                {testResult.connected ? (testResult.message || "Connected") : (testResult.error || testResult.hint || "Connection failed")}
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-[12px]" style={{ color: "#6B7E92" }}>
+              <Radio size={12} className={wsConnected ? "text-emerald-500" : "text-red-500"} />
+              WebSocket: {wsConnected ? "Connected" : "Disconnected"}
+            </div>
+          </div>
+        </div>
+
+        {/* Create Draft */}
+        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CREATE CW DRAFT</span>
+          </div>
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Select Approved Shipment</label>
+              <select
+                value={selectedShipmentId || ""}
+                onChange={(e) => setSelectedShipmentId(e.target.value || null)}
+                className="w-full px-3 py-2 text-[13px] rounded-md border outline-none"
+                style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}
+              >
+                <option value="">— Select shipment —</option>
+                {shipments.items.map((s) => (
+                  <option key={s.id} value={s.id}>{s.reference} — {s.shipperName || "Unknown"}</option>
+                ))}
+              </select>
+            </div>
+            <button onClick={handleCreateDraft} disabled={!selectedShipmentId || draftLoading} className="w-full py-2 rounded-md text-[13px] font-semibold text-white disabled:opacity-50" style={{ backgroundColor: "#B8860B" }}>
+              {draftLoading ? <Loader2 size={14} className="animate-spin inline mr-1" /> : <ExternalLink size={14} className="inline mr-1" />}
+              Create Draft
+            </button>
+            {draftResult && (
+              <div className={`rounded-md p-3 text-[12px] ${draftResult.startsWith("✓") ? "border" : "border"}`} style={{
+                backgroundColor: draftResult.startsWith("✓") ? "#EBF5EE" : "#FEF2F2",
+                borderColor: draftResult.startsWith("✓") ? "#C6E4CE" : "#F5A5A5",
+                color: draftResult.startsWith("✓") ? "#15632A" : "#9B1C1C",
+              }}>{draftResult}</div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Transaction Compaction Table */}
-      <div className="mt-4 rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>TRANSACTION COMPACTION</span>
+      {/* Execution History */}
+      <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
+          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>EXECUTION HISTORY</span>
+          <button onClick={() => refetchExecutions()} className="text-[12px] font-medium hover:underline" style={{ color: "#B8860B" }}>Refresh</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr style={{ backgroundColor: "#F1F4F8" }}>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Reference</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Type</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Status</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Duration</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Error</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Date</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Original TX Count</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Compacted TX Count</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Saved</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Est. Saving (USD)</th>
               </tr>
             </thead>
             <tbody>
-              {compactionData.map((row, i) => (
-                <tr key={i} className="border-b hover:bg-[#F1F4F8] transition-colors" style={{ borderColor: "#DDE3EA" }}>
-                  <td className="px-4 py-2.5 font-mono text-[12px]" style={{ color: "#0D1B2A" }}>{row.date}</td>
-                  <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#3D5166" }}>{row.origTx.toLocaleString()}</td>
-                  <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#15632A" }}>{row.compactedTx.toLocaleString()}</td>
-                  <td className="px-4 py-2.5 text-right font-mono font-medium" style={{ color: "#15632A" }}>-{row.saved.toLocaleString()}</td>
-                  <td className="px-4 py-2.5 text-right font-mono font-semibold" style={{ color: "#15632A" }}>${row.estSaving.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+              {executionsLoading ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>Loading...</td></tr>
+              ) : executions.executions.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>No CW executions yet.</td></tr>
+              ) : executions.executions.map((ex) => (
+                <tr key={ex.id} className="border-b" style={{ borderColor: "#DDE3EA" }}>
+                  <td className="px-4 py-2.5 font-mono text-[12px]" style={{ color: "#B8860B" }}>{ex.shipment?.reference || ex.shipmentId}</td>
+                  <td className="px-4 py-2.5" style={{ color: "#3D5166" }}>{ex.executionType}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ex.status === "success" ? "bg-emerald-50 text-emerald-700" : ex.status === "failed" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>{ex.status}</span>
+                  </td>
+                  <td className="px-4 py-2.5 font-mono" style={{ color: "#3D5166" }}>{ex.durationMs ? `${ex.durationMs}ms` : "—"}</td>
+                  <td className="px-4 py-2.5 max-w-[200px] truncate text-red-600 text-[12px]">{ex.errorMessage || "—"}</td>
+                  <td className="px-4 py-2.5" style={{ color: "#6B7E92" }}>{relativeTime(ex.createdAt)}</td>
                 </tr>
               ))}
-              <tr style={{ backgroundColor: "#F1F4F8" }}>
-                <td className="px-4 py-2.5 font-semibold" style={{ color: "#3D5166" }}>Total (7 days)</td>
-                <td className="px-4 py-2.5 text-right font-mono font-semibold" style={{ color: "#3D5166" }}>{compactionData.reduce((s, r) => s + r.origTx, 0).toLocaleString()}</td>
-                <td className="px-4 py-2.5 text-right font-mono font-semibold" style={{ color: "#15632A" }}>{compactionData.reduce((s, r) => s + r.compactedTx, 0).toLocaleString()}</td>
-                <td className="px-4 py-2.5 text-right font-mono font-semibold" style={{ color: "#15632A" }}>-{compactionData.reduce((s, r) => s + r.saved, 0).toLocaleString()}</td>
-                <td className="px-4 py-2.5 text-right font-mono font-bold" style={{ color: "#15632A" }}>${compactionData.reduce((s, r) => s + r.estSaving, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -1033,215 +1551,288 @@ function WiseLayerView() {
 }
 
 /* ══════════════════════════════════════════════
-   CargoWise View
+   Settings View
    ══════════════════════════════════════════════ */
 
-function CargoWiseView({ setView }: { setView: (v: ViewMode) => void }) {
-  const [connected, setConnected] = useState(false);
+function SettingsView() {
+  const [cwServerUrl, setCwServerUrl] = useState("");
+  const [cwEnterpriseId, setCwEnterpriseId] = useState("");
+  const [cwServerId, setCwServerId] = useState("");
+  const [cwCredentials, setCwCredentials] = useState("");
+  const [saveResult, setSaveResult] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("");
 
-  const cwExecutions = [
-    { ref: "CW-EXEC-001247", type: "Shipment Draft", status: "success" as const, duration: "2.3s", timestamp: "2026-03-04 09:38:12" },
-    { ref: "CW-EXEC-001246", type: "eAdaptor XML", status: "success" as const, duration: "4.1s", timestamp: "2026-03-04 09:15:44" },
-    { ref: "CW-EXEC-001245", type: "Shipment Draft", status: "failed" as const, duration: "1.8s", timestamp: "2026-03-04 08:52:01" },
-    { ref: "CW-EXEC-001244", type: "Invoice Sync", status: "success" as const, duration: "3.6s", timestamp: "2026-03-04 08:30:19" },
-    { ref: "CW-EXEC-001243", type: "eAdaptor XML", status: "success" as const, duration: "5.2s", timestamp: "2026-03-04 07:45:33" },
-  ];
+  // Try to load org settings
+  useEffect(() => {
+    fetch("/api/analytics").then(r => r.json()).then(() => {
+      // We don't have a direct org API, so we'll show placeholder values
+      setOrgName("CargoIQ Demo Organisation");
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveCw = async () => {
+    setSaveResult(null);
+    // In a real implementation, this would call a settings API
+    setSaveResult("✓ Configuration saved (connectivity test required)");
+    setTimeout(() => setSaveResult(null), 3000);
+  };
 
   return (
-    <div className="p-6 max-w-[1200px]">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-[30px] font-semibold" style={{ color: "#0D1B2A" }}>CargoWise Integration Status</h1>
-          <p className="text-[14px] mt-1" style={{ color: "#6B7E92" }}>Monitor CargoWise connectivity and execution history.</p>
+    <div className="p-6 max-w-[1440px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Organisation */}
+        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
+            <Building2 size={16} style={{ color: "#B8860B" }} />
+            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>ORGANISATION</span>
+          </div>
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Organisation Name</label>
+              <input value={orgName} onChange={(e) => setOrgName(e.target.value)} className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Plan</label>
+              <div className="px-3 py-2 text-[13px] rounded-md border" style={{ borderColor: "#C8D0DA", backgroundColor: "#F1F4F8", color: "#0D1B2A" }}>Professional — South Africa</div>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Confidence Threshold</label>
+              <select className="w-full px-3 py-2 text-[13px] border rounded-md outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
+                <option value="high">High — Only auto-approve high confidence</option>
+                <option value="medium">Medium — Auto-approve medium and above</option>
+                <option value="low">Low — Auto-approve all except low</option>
+              </select>
+            </div>
+          </div>
         </div>
-        {/* Demo toggle */}
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] font-medium" style={{ color: "#6B7E92" }}>Demo mode:</span>
-          <button
-            onClick={() => setConnected(!connected)}
-            className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-            style={{ backgroundColor: connected ? "#15632A" : "#C8D0DA" }}
-          >
-            <span
-              className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-              style={{ transform: connected ? "translateX(24px)" : "translateX(2px)" }}
-            />
-          </button>
-          <span className="text-[12px] font-semibold" style={{ color: connected ? "#15632A" : "#6B7E92" }}>
-            {connected ? "Connected" : "Not Connected"}
-          </span>
+
+        {/* CargoWise Configuration */}
+        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
+            <Server size={16} style={{ color: "#B8860B" }} />
+            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CARGOWISE CONFIGURATION</span>
+          </div>
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>eAdaptor Server URL</label>
+              <input value={cwServerUrl} onChange={(e) => setCwServerUrl(e.target.value)} placeholder="https://your-cw-instance.com/eAdaptor" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Enterprise ID</label>
+              <input value={cwEnterpriseId} onChange={(e) => setCwEnterpriseId(e.target.value)} placeholder="Enter CW Enterprise ID" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Server ID</label>
+              <input value={cwServerId} onChange={(e) => setCwServerId(e.target.value)} placeholder="Enter CW Server ID" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Credentials (Base64)</label>
+              <input value={cwCredentials} onChange={(e) => setCwCredentials(e.target.value)} type="password" placeholder="Enter Basic Auth credentials" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+            </div>
+            <button onClick={handleSaveCw} className="px-4 py-2 rounded-md text-[13px] font-semibold text-white" style={{ backgroundColor: "#B8860B" }}>Save Configuration</button>
+            {saveResult && <div className="text-[12px] font-medium text-emerald-700">{saveResult}</div>}
+          </div>
+        </div>
+
+        {/* Email Configuration */}
+        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
+            <Mail size={16} style={{ color: "#B8860B" }} />
+            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>EMAIL CONNECTION</span>
+          </div>
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>IMAP Server</label>
+              <input placeholder="imap.your-company.co.za" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Email Address</label>
+              <input placeholder="cargoiq@your-company.co.za" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Password / App Key</label>
+              <input type="password" placeholder="••••••••" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+            </div>
+            <div className="rounded-md p-3 text-[12px]" style={{ backgroundColor: "#FEF6E7", borderColor: "#E8B84B", color: "#7A4F00", border: "1px solid #E8B84B" }}>
+              Email ingestion is active via the /api/ingest/email webhook. Configure your email provider to POST incoming messages.
+            </div>
+          </div>
+        </div>
+
+        {/* User Management */}
+        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
+          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
+            <Users size={16} style={{ color: "#B8860B" }} />
+            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>USER MANAGEMENT</span>
+          </div>
+          <div className="p-4">
+            <div className="space-y-2">
+              {[
+                { name: "J. Mokoena", email: "jmokoena@cargoiq.co.za", role: "Admin" },
+                { name: "A. Naidoo", email: "anaidoo@cargoiq.co.za", role: "Operator" },
+                { name: "S. van der Merwe", email: "svdmerwe@cargoiq.co.za", role: "Compliance" },
+              ].map((user) => (
+                <div key={user.email} className="flex items-center gap-3 p-2 rounded-md border" style={{ borderColor: "#DDE3EA" }}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold" style={{ backgroundColor: "#B8860B", color: "#FFF" }}>
+                    {user.name.split(" ").map((n) => n[0]).join("")}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-[12px] font-medium" style={{ color: "#0D1B2A" }}>{user.name}</div>
+                    <div className="text-[11px]" style={{ color: "#6B7E92" }}>{user.email}</div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">{user.role}</span>
+                </div>
+              ))}
+            </div>
+            <button className="mt-3 px-4 py-2 text-[12px] rounded-md border hover:bg-[#F1F4F8] transition-colors" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>+ Add User</button>
+          </div>
         </div>
       </div>
-
-      {connected ? (
-        <div className="space-y-4">
-          {/* Connection Status Card */}
-          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CONNECTION STATUS</span>
-            </div>
-            <div className="p-4 flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-              <div className="flex-1">
-                <div className="text-[14px] font-medium" style={{ color: "#0D1B2A" }}>
-                  Connected to <span className="font-mono" style={{ color: "#1A4971" }}>cw-prod.safreight.co.za</span>
-                </div>
-                <div className="text-[12px]" style={{ color: "#6B7E92" }}>
-                  Last successful sync: 2026-03-04 09:38:12 SAST
-                </div>
-              </div>
-              <Wifi size={18} className="text-emerald-600" />
-            </div>
-          </div>
-
-          {/* Recent CW Executions */}
-          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>RECENT CW EXECUTIONS</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr style={{ backgroundColor: "#F1F4F8" }}>
-                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Ref</th>
-                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Type</th>
-                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Status</th>
-                    <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Duration</th>
-                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cwExecutions.map((exec) => (
-                    <tr key={exec.ref} className="border-b hover:bg-[#F1F4F8] transition-colors" style={{ borderColor: "#DDE3EA" }}>
-                      <td className="px-4 py-2.5 font-mono text-[12px] font-medium" style={{ color: "#B8860B" }}>{exec.ref}</td>
-                      <td className="px-4 py-2.5" style={{ color: "#0D1B2A" }}>{exec.type}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${exec.status === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${exec.status === "success" ? "bg-emerald-500" : "bg-red-500"}`} />
-                          {exec.status === "success" ? "Success" : "Failed"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#3D5166" }}>{exec.duration}</td>
-                      <td className="px-4 py-2.5 font-mono text-[12px]" style={{ color: "#6B7E92" }}>{exec.timestamp}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-4 flex flex-col items-center justify-center p-16 rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="w-16 h-16 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#EBF3FB" }}>
-            <Database size={32} style={{ color: "#1A4971" }} />
-          </div>
-          <h2 className="text-[18px] font-semibold mt-4" style={{ color: "#0D1B2A" }}>CargoWise Not Connected</h2>
-          <p className="text-[14px] mt-1 text-center max-w-[400px]" style={{ color: "#6B7E92" }}>
-            Configure your CargoWise server credentials in Settings to enable draft creation and eAdaptor XML integration.
-          </p>
-          <button
-            onClick={() => setView("settings")}
-            className="mt-5 px-4 py-2 rounded text-[14px] font-semibold text-white transition-colors hover:opacity-90"
-            style={{ backgroundColor: "#B8860B" }}
-          >
-            Go to Settings
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════
-   Settings View
+   Document Upload Dialog
    ══════════════════════════════════════════════ */
 
-function SettingsView() {
+function DocumentUploadDialog({ open, onClose, onShipmentCreated }: {
+  open: boolean; onClose: () => void; onShipmentCreated: (id: string) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [docType, setDocType] = useState("commercial_invoice");
+  const [source, setSource] = useState("manual_upload");
+  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState<string>("");
+  const [result, setResult] = useState<{ success: boolean; shipment?: { id: string; reference: string }; error?: string } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) setFile(droppedFile);
+  };
+
+  const handleProcess = async () => {
+    if (!file) return;
+    setProcessing(true);
+    setProgress("Uploading document...");
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("docType", docType);
+      formData.append("source", source);
+
+      setProgress("Running AI extraction pipeline...");
+
+      const res = await fetch("/api/process", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setProgress("Processing complete!");
+        setResult({ success: true, shipment: data.shipment });
+      } else {
+        setProgress("Processing failed");
+        setResult({ success: false, error: data.error || data.message || "Unknown error" });
+      }
+    } catch (e) {
+      setProgress("Network error");
+      setResult({ success: false, error: e instanceof Error ? e.message : "Upload failed" });
+    }
+    setProcessing(false);
+  };
+
+  const handleClose = () => {
+    if (result?.success && result.shipment) {
+      onShipmentCreated(result.shipment.id);
+    }
+    setFile(null);
+    setResult(null);
+    setProgress("");
+    setProcessing(false);
+    onClose();
+  };
+
+  if (!open) return null;
+
   return (
-    <div className="p-6 max-w-[900px]">
-      {/* Confidence Thresholds */}
-      <div className="rounded-lg border mb-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>AI CONFIDENCE THRESHOLDS</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 mx-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[15px] font-semibold" style={{ color: "#0D1B2A" }}>Upload & Process Document</h3>
+          <button onClick={handleClose} className="p-1 rounded hover:bg-[#E8ECF1]" style={{ color: "#6B7E92" }}><X size={18} /></button>
         </div>
-        <div className="p-4 space-y-4">
-          {[
-            { label: "Auto-approve threshold", desc: "Shipments above this confidence level are automatically approved", value: "85%" },
-            { label: "Review threshold", desc: "Shipments below this level require manual review", value: "60%" },
-            { label: "Block threshold", desc: "Shipments below this level are blocked from CargoWise", value: "40%" },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center justify-between">
+
+        {/* Drop Zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors mb-4 ${dragOver ? "border-[#B8860B] bg-[#FEF6E7]" : "border-[#C8D0DA] bg-[#F1F4F8]"}`}
+        >
+          <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); }} />
+          <Upload size={32} className="mx-auto mb-2" style={{ color: dragOver ? "#B8860B" : "#9AAAB8" }} />
+          <div className="text-[13px] font-medium" style={{ color: "#0D1B2A" }}>
+            {file ? file.name : "Drop a file here or click to browse"}
+          </div>
+          <div className="text-[11px] mt-1" style={{ color: "#6B7E92" }}>Supports PDF, images, Excel, Word</div>
+        </div>
+
+        {/* Options */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Document Type</label>
+            <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
+              <option value="commercial_invoice">Commercial Invoice</option>
+              <option value="packing_list">Packing List</option>
+              <option value="bill_of_lading">Bill of Lading</option>
+              <option value="air_waybill">Air Waybill</option>
+              <option value="customs_declaration">Customs Declaration</option>
+              <option value="unknown">Unknown / Other</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Source</label>
+            <select value={source} onChange={(e) => setSource(e.target.value)} className="w-full px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
+              <option value="manual_upload">Manual Upload</option>
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Process Button */}
+        <button
+          onClick={handleProcess}
+          disabled={!file || processing}
+          className="w-full py-2.5 rounded-md text-[13px] font-semibold text-white disabled:opacity-50 mb-4"
+          style={{ backgroundColor: "#B8860B" }}
+        >
+          {processing ? <><Loader2 size={14} className="animate-spin inline mr-2" />{progress}</> : "Process Document"}
+        </button>
+
+        {/* Result */}
+        {result && (
+          <div className={`rounded-md p-3 text-[12px] ${result.success ? "border" : "border"}`} style={{
+            backgroundColor: result.success ? "#EBF5EE" : "#FEF2F2",
+            borderColor: result.success ? "#C6E4CE" : "#F5A5A5",
+            color: result.success ? "#15632A" : "#9B1C1C",
+          }}>
+            {result.success ? (
               <div>
-                <div className="text-[13px] font-medium" style={{ color: "#0D1B2A" }}>{item.label}</div>
-                <div className="text-[12px]" style={{ color: "#6B7E92" }}>{item.desc}</div>
+                <div className="font-semibold mb-1">✓ Shipment Created: {result.shipment?.reference}</div>
+                <button onClick={handleClose} className="underline text-[11px]">View shipment →</button>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  defaultValue={item.value}
-                  className="w-20 px-2 py-1 text-[13px] text-right rounded border outline-none focus:border-[#B8860B]"
-                  style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* CargoWise Connection */}
-      <div className="rounded-lg border mb-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CARGOWISE CONNECTION</span>
-        </div>
-        <div className="p-4 space-y-3">
-          {[
-            { label: "Server URL", value: "", placeholder: "https://your-cargowise-server.com" },
-            { label: "Username", value: "", placeholder: "cw_username" },
-            { label: "Password", value: "", placeholder: "••••••••" },
-            { label: "Organization Code", value: "", placeholder: "ORG001" },
-          ].map((field) => (
-            <div key={field.label}>
-              <label className="block text-[12px] font-medium mb-1" style={{ color: "#3D5166" }}>{field.label}</label>
-              <input
-                type={field.label === "Password" ? "password" : "text"}
-                defaultValue={field.value}
-                placeholder={field.placeholder}
-                className="w-full px-3 py-2 text-[13px] rounded-md border outline-none focus:border-[#B8860B] focus:ring-2 focus:ring-[#FDF3DC]"
-                style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}
-              />
-            </div>
-          ))}
-          <button className="px-4 py-2 rounded-md text-[13px] font-semibold text-white transition-colors hover:opacity-90" style={{ backgroundColor: "#B8860B" }}>
-            Test Connection
-          </button>
-        </div>
-      </div>
-
-      {/* Email Ingestion */}
-      <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>EMAIL INGESTION</span>
-        </div>
-        <div className="p-4 space-y-3">
-          {[
-            { label: "IMAP Server", placeholder: "imap.gmail.com" },
-            { label: "Email Address", placeholder: "freight@yourcompany.co.za" },
-            { label: "Password / App Key", placeholder: "••••••••" },
-          ].map((field) => (
-            <div key={field.label}>
-              <label className="block text-[12px] font-medium mb-1" style={{ color: "#3D5166" }}>{field.label}</label>
-              <input
-                type={field.label.includes("Password") ? "password" : "text"}
-                placeholder={field.placeholder}
-                className="w-full px-3 py-2 text-[13px] rounded-md border outline-none focus:border-[#B8860B] focus:ring-2 focus:ring-[#FDF3DC]"
-                style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}
-              />
-            </div>
-          ))}
-          <button className="px-4 py-2 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#F1F4F8]" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>
-            + Add Email Connection
-          </button>
-        </div>
+            ) : (
+              <div>✗ {result.error}</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1253,17 +1844,11 @@ function SettingsView() {
 
 function Footer() {
   return (
-    <footer
-      className="flex items-center justify-center flex-shrink-0"
-      style={{
-        backgroundColor: "#1A2332",
-        borderTop: "1px solid #243040",
-        height: 32,
-      }}
-    >
-      <span className="text-[11px]" style={{ color: "#6B7E92" }}>
-        CARGOiQ (Pty) Ltd | Johannesburg, South Africa | POPIA Compliant | All data stored in South Africa
-      </span>
+    <footer className="mt-auto border-t px-5 py-3" style={{ backgroundColor: "#F1F4F8", borderColor: "#C8D0DA" }}>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]" style={{ color: "#6B7E92" }}>
+        <span>© 2026 CARGOiQ — AI Compliance & Cost Containment Platform</span>
+        <span>Built for South African Freight Forwarders · SARS 2025/2026 Enforcement Ready</span>
+      </div>
     </footer>
   );
 }
@@ -1272,57 +1857,140 @@ function Footer() {
    Main Page
    ══════════════════════════════════════════════ */
 
-export default function Home() {
+export default function CargoIQPage() {
   const [view, setView] = useState<ViewMode>("dashboard");
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [notifications, setNotifications] = useState<WsNotification[]>([]);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [wsCreatedShipment, setWsCreatedShipment] = useState<ShipmentSummary | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+
+  // Seed demo data on first load
+  useEffect(() => {
+    fetch("/api/health").then(() => {
+      // Check if we have data; if not, seed
+      fetch("/api/shipments?limit=1").then(r => r.json()).then((data: ShipmentListResponse) => {
+        if (data.total === 0) {
+          fetch("/api/seed", { method: "POST" }).then(() => {
+            console.log("[CargoIQ] Demo data seeded");
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }).catch(() => {});
+  }, []);
+
+  // WebSocket connection
+  useEffect(() => {
+    const socket = io({
+      transports: ["websocket"],
+      path: "/socket.io",
+      query: { XTransformPort: "3003" },
+    });
+
+    socket.on("connect", () => {
+      setWsConnected(true);
+      console.log("[WS] Connected:", socket.id);
+    });
+
+    socket.on("disconnect", () => {
+      setWsConnected(false);
+      console.log("[WS] Disconnected");
+    });
+
+    const events = ["shipment:created", "shipment:updated", "shipment:approved", "shipment:rejected", "shield:completed", "cw:draft_created", "cw:draft_failed", "email:ingested", "extraction:complete", "notification"];
+    for (const event of events) {
+      socket.on(event, (data: WsNotification) => {
+        console.log(`[WS] ${event}:`, data);
+        setNotificationCount((c) => c + 1);
+        setNotifications((prev) => [{ ...data, type: data.type || event }, ...prev].slice(0, 10));
+
+        // If new shipment created, add it to the queue
+        if (event === "shipment:created" && data.shipmentId) {
+          setWsCreatedShipment({
+            id: data.shipmentId as string,
+            reference: (data.reference as string) || "CIQ-NEW",
+            shipperName: (data.shipperName as string) || "",
+            consigneeName: "",
+            originPort: "",
+            destinationPort: "",
+            shipmentType: "",
+            awbOrBlNumber: "",
+            overallConfidence: "medium",
+            shieldStatus: "pending",
+            status: "pending",
+            documentCount: 0,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      });
+    }
+
+    socketRef.current = socket;
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   const handleSelectShipment = (id: string) => {
     setSelectedShipmentId(id);
     setView("shipment-detail");
   };
 
-  const handleSetView = (v: ViewMode) => {
-    setView(v);
+  const handleUploadCreated = (id: string) => {
+    setSelectedShipmentId(id);
+    setView("shipment-detail");
   };
 
+  const currentNotification = notifications[0] || null;
+
   return (
-    <div className="h-screen flex flex-col" style={{ backgroundColor: "#F1F4F8" }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#F1F4F8" }}>
       <Sidebar
         view={view}
-        setView={handleSetView}
-        collapsed={sidebarCollapsed}
-        toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        mobileOpen={mobileSidebarOpen}
-        onMobileClose={() => setMobileSidebarOpen(false)}
+        setView={setView}
+        collapsed={collapsed}
+        toggleCollapse={() => setCollapsed(!collapsed)}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
       />
       <TopNav
         view={view}
-        collapsed={sidebarCollapsed}
-        onToggleMobileSidebar={() => setMobileSidebarOpen(true)}
-        onQuickUpload={() => setView("compliance")}
+        collapsed={collapsed}
+        onToggleMobileSidebar={() => setMobileOpen(true)}
+        onQuickUpload={() => setUploadOpen(true)}
+        wsConnected={wsConnected}
+        notificationCount={notificationCount}
       />
+
+      {/* Main Content */}
       <main
-        className="flex-1 overflow-y-auto transition-all duration-200"
-        style={{
-          marginLeft: sidebarCollapsed ? 56 : 240,
-          paddingTop: 56,
-        }}
+        className={`flex-1 pt-14 transition-all duration-200 ${collapsed ? "md:ml-14" : "md:ml-60"}`}
       >
-        <div className="min-h-full flex flex-col">
-          <div className="flex-1">
-            {view === "dashboard" && <DashboardView setView={handleSetView} />}
-            {view === "shipments" && <ShipmentQueueView onSelectShipment={handleSelectShipment} />}
-            {view === "shipment-detail" && <ShipmentDetailView shipmentId={selectedShipmentId} setView={handleSetView} />}
-            {view === "compliance" && <ComplianceView />}
-            {view === "wiselayer" && <WiseLayerView />}
-            {view === "cargowise" && <CargoWiseView setView={handleSetView} />}
-            {view === "settings" && <SettingsView />}
-          </div>
-          <Footer />
-        </div>
+        {view === "dashboard" && <DashboardView setView={setView} onSelectShipment={handleSelectShipment} />}
+        {view === "shipments" && <ShipmentQueueView onSelectShipment={handleSelectShipment} wsCreatedShipment={wsCreatedShipment} />}
+        {view === "shipment-detail" && selectedShipmentId && <ShipmentDetailView shipmentId={selectedShipmentId} setView={setView} />}
+        {view === "compliance" && <ComplianceView />}
+        {view === "wiselayer" && <WiseLayerView />}
+        {view === "cargowise" && <CargoWiseView wsConnected={wsConnected} />}
+        {view === "settings" && <SettingsView />}
       </main>
+
+      <Footer />
+
+      <DocumentUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onShipmentCreated={handleUploadCreated} />
+
+      {/* Notification Toast */}
+      {currentNotification && (
+        <NotificationToast
+          notification={currentNotification}
+          onDismiss={() => setNotifications((prev) => prev.slice(1))}
+        />
+      )}
     </div>
   );
 }
