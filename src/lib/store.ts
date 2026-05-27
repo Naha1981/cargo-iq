@@ -1,6 +1,6 @@
 // CargoIQ — Zustand Store
 import { create } from "zustand";
-import type { ViewMode, ShipmentSummary, ShipmentDetail, OverviewStats } from "./types";
+import type { ViewMode, ShipmentSummary, ShipmentDetail, OverviewStats, IngestSource } from "./types";
 
 interface CargoIQState {
   // Navigation
@@ -18,6 +18,7 @@ interface CargoIQState {
   statusFilter: string;
   shieldFilter: string;
   searchQuery: string;
+  sourceFilter: IngestSource | "";
 
   // Actions
   setView: (view: ViewMode) => void;
@@ -30,10 +31,11 @@ interface CargoIQState {
   setStatusFilter: (filter: string) => void;
   setShieldFilter: (filter: string) => void;
   setSearchQuery: (query: string) => void;
+  setSourceFilter: (filter: IngestSource | "") => void;
 }
 
 export const useCargoIQStore = create<CargoIQState>((set) => ({
-  currentView: "dashboard",
+  currentView: "cargoflow",
   selectedShipmentId: null,
   sidebarCollapsed: false,
 
@@ -45,9 +47,10 @@ export const useCargoIQStore = create<CargoIQState>((set) => ({
   statusFilter: "",
   shieldFilter: "",
   searchQuery: "",
+  sourceFilter: "",
 
   setView: (view) => set({ currentView: view }),
-  selectShipment: (id) => set({ currentView: "shipment-detail", selectedShipmentId: id }),
+  selectShipment: (id) => set({ selectedShipmentId: id }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setShipments: (shipments) => set({ shipments }),
   setShipmentDetail: (detail) => set({ shipmentDetail: detail }),
@@ -56,4 +59,5 @@ export const useCargoIQStore = create<CargoIQState>((set) => ({
   setStatusFilter: (filter) => set({ statusFilter: filter }),
   setShieldFilter: (filter) => set({ shieldFilter: filter }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  setSourceFilter: (filter) => set({ sourceFilter: filter }),
 }));

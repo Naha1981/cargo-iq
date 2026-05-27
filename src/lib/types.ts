@@ -13,12 +13,12 @@ export type ShipmentStatus =
 
 export type ViewMode =
   | "dashboard"
-  | "shipments"
-  | "shipment-detail"
-  | "compliance"
+  | "cargoflow"
   | "wiselayer"
-  | "cargowise"
+  | "compliance"
   | "settings";
+
+export type IngestSource = "email" | "whatsapp" | "upload";
 
 export interface ShipmentSummary {
   id: string;
@@ -30,8 +30,10 @@ export interface ShipmentSummary {
   shipmentType: string | null;
   awbOrBlNumber: string | null;
   overallConfidence: Confidence | null;
+  confidencePercent: number;
   shieldStatus: ShieldStatus | null;
   status: ShipmentStatus;
+  source: IngestSource;
   documentCount: number;
   createdAt: string;
 }
@@ -57,6 +59,7 @@ export interface ShipmentDetail extends ShipmentSummary {
   lineItems: CargoLineItem[];
   documents: ShipmentDocument[];
   complianceEvents: ComplianceEvent[];
+  fieldConfidence: Record<string, Confidence>;
 }
 
 export interface ShieldReport {
@@ -126,8 +129,26 @@ export interface RlaStatus {
   id: string;
   importerCode: string;
   importerName: string | null;
-  rlaStatus: string;
+  rlaStatus: "active" | "suspended" | "inactive";
   lastCheckedAt: string | null;
   suspendedSince: string | null;
   alertSent: boolean;
+}
+
+export interface WebwrightExecution {
+  id: string;
+  prompt: string;
+  targetUrl: string;
+  status: "running" | "success" | "error";
+  output: string[];
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface XmlCompactorStats {
+  projectedTxCount: number;
+  compactedSavingsPercent: number;
+  monthlySavingsZAR: number;
+  ytdSavingsZAR: number;
+  transactionData: Array<{ date: string; total: number; saved: number }>;
 }

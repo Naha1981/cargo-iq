@@ -517,3 +517,34 @@ Stage Summary:
 - Clean database with 10 realistic SA freight shipments
 - 3 services running: main app (3000), notifications (3003)
 - Full pipeline verified end-to-end: email → extraction → shipment → compliance → CW draft
+---
+Task ID: 1
+Agent: Main
+Task: Rebuild CargoIQ UI with CargoFlow AI split-screen workspace and WiseLayer Cost Guard screens
+
+Work Log:
+- Updated types.ts with IngestSource, confidencePercent, fieldConfidence, WebwrightExecution, XmlCompactorStats
+- Updated mock-data.ts with SA-specific references (SAD500-*, AWB-*), source field, confidence percentages, RLA statuses with SA company names (Calthol CC, Saco CFR, Small Forward), XML compactor stats, Webwright execution data
+- Updated store.ts with new ViewMode (cargoflow, wiselayer), sourceFilter
+- Rebuilt complete page.tsx (1934 lines) with:
+  - Deep Navy Blue (#0B1F2A) sidebar with CARGOiQ branding
+  - Muted Orange (#FF7A1A) accent/highlight system
+  - CargoFlow AI split-screen workspace:
+    - Quarantine Queue (280px left panel) with reference, source icon, confidence bars
+    - Document Viewer (dark bg, SAD 500 form representation with tabs)
+    - AI Draft Editable Form (inline editing, confidence-colored borders: green/amber/orange)
+    - SARS Penalty Shield Banner (orange bg with compliance warnings)
+    - Reject File / Release to CargoWise action buttons
+  - WiseLayer Cost Guard & Agent Control:
+    - XML Payload Compactor (projected tx count, compacted savings %, monthly savings in ZAR)
+    - RLA Status Sentinel (importer list with active/suspended/inactive status, "Run eFiling Audit Now")
+    - Webwright Terminal (black bg, orange text, animated execution with prompt/URL inputs)
+  - Dashboard view with KPIs, recent shipments table, compliance shield summary
+  - Settings view with tab-based layout
+
+Stage Summary:
+- Application compiles and serves at HTTP 200
+- CargoFlow AI is the default view
+- All SA-specific terminology and ZAR formatting implemented
+- Webwright terminal simulates execution with animated output
+- Confidence color coding: green (high ≥85%), amber (medium 65-85%), orange (low <65%)

@@ -1,404 +1,274 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { io, Socket } from "socket.io-client";
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   PackageSearch,
-  ShieldCheck,
   BarChart3,
   Settings,
-  Database,
+  Mail,
+  MessageCircle,
+  Upload,
   ChevronLeft,
   ChevronRight,
-  Search,
   Bell,
-  FileText,
   AlertTriangle,
   CheckCircle2,
   XCircle,
   Clock,
+  FileText,
+  Search,
+  Menu,
+  X,
+  Shield,
+  Play,
+  DollarSign,
+  TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
-  Upload,
-  Eye,
-  Ban,
-  RefreshCw,
-  ExternalLink,
-  DollarSign,
   Zap,
   AlertCircle,
-  Menu,
-  ArrowRight,
-  Wifi,
-  WifiOff,
-  Play,
+  Eye,
+  Ban,
   Send,
-  Code2,
+  Terminal,
   Activity,
-  Radio,
-  X,
-  ThumbsUp,
-  ThumbsDown,
-  File,
-  FileSpreadsheet,
-  FileType,
-  Loader2,
-  Save,
-  Mail,
-  Hash,
+  RefreshCw,
+  ChevronDown,
+  Edit3,
+  Check,
+  ExternalLink,
+  Package,
   Globe,
-  Building2,
-  Server,
-  Key,
-  Users,
-  ShieldAlert,
-} from "lucide-react";
+} from 'lucide-react';
+import {
+  mockShipments,
+  mockOverviewStats,
+  mockRlaStatuses,
+  mockXmlCompactorStats,
+  mockWebwrightExecutions,
+  getMockShipmentDetail,
+} from '@/lib/mock-data';
+import type {
+  ViewMode,
+  ShipmentSummary,
+  ShipmentDetail,
+  Confidence,
+  ShieldStatus,
+  IngestSource,
+  RlaStatus,
+  WebwrightExecution,
+} from '@/lib/types';
 
-/* ══════════════════════════════════════════════
-   Types
-   ══════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ══════════════════════════════════════════════════════════════════════ */
 
-type ViewMode = "dashboard" | "shipments" | "shipment-detail" | "compliance" | "wiselayer" | "cargowise" | "settings";
-type Confidence = "high" | "medium" | "low";
-type ShieldStatus = "pass" | "hold" | "fail" | "pending";
-type ShipmentStatus = "pending" | "review_required" | "approved" | "rejected" | "in_cargowise" | "cw_draft_created" | "error";
+const COLORS = {
+  navy: '#0B1F2A',
+  navyLight: '#132D3E',
+  navyBorder: '#1E3A4F',
+  orange: '#FF7A1A',
+  orangeHover: '#E56A10',
+  orangeSubtle: '#FFF3E8',
+  orangeBorder: '#FFB574',
+  canvas: '#F1F4F8',
+  surface: '#FFFFFF',
+  surfaceSubtle: '#E8ECF1',
+  textPrimaryDark: '#E2E8F0',
+  textSecondaryDark: '#94A3B8',
+  textPrimaryLight: '#0D1B2A',
+  textSecondaryLight: '#3D5166',
+  textTertiary: '#64748B',
+  borderLight: '#C8D0DA',
+  borderSubtle: '#DDE3EA',
+  success: '#10B981',
+  successBg: '#ECFDF5',
+  successDark: '#15632A',
+  warning: '#FF7A1A',
+  warningBg: '#FFF7ED',
+  warningDark: '#7A4F00',
+  error: '#EF4444',
+  errorBg: '#FEF2F2',
+  errorDark: '#9B1C1C',
+  accent: '#B8860B',
+  accentBg: '#FDF3DC',
+} as const;
 
-interface ShipmentSummary {
-  id: string;
-  reference: string;
-  shipperName: string;
-  consigneeName: string;
-  originPort: string;
-  destinationPort: string;
-  shipmentType: string;
-  awbOrBlNumber: string;
-  overallConfidence: Confidence;
-  shieldStatus: ShieldStatus;
-  status: ShipmentStatus;
-  documentCount: number;
-  createdAt: string;
+/* ══════════════════════════════════════════════════════════════════════
+   HELPERS
+   ══════════════════════════════════════════════════════════════════════ */
+
+function formatZAR(n: number): string {
+  return 'R ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-interface ShipmentListResponse {
-  items: ShipmentSummary[];
-  total: number;
-  page: number;
-  limit: number;
+function formatZARShort(n: number): string {
+  return 'R' + n.toLocaleString('en-ZA');
 }
 
-interface LineItem {
-  id: string;
-  lineNumber: number;
-  hsCode: string | null;
-  description: string | null;
-  quantity: number | null;
-  unit: string | null;
-  unitWeight: number | null;
-  totalWeight: number | null;
-  unitValue: number | null;
-  totalValue: number | null;
-  currency: string | null;
-  confidence: string | null;
-}
-
-interface ComplianceEvent {
-  id: string;
-  module: string;
-  result: string;
-  detail: string;
-  penaltyRisk: boolean;
-  createdAt: string;
-}
-
-interface Document {
-  id: string;
-  filename: string;
-  docType: string;
-  fileType: string;
-  status: string;
-  createdAt: string;
-}
-
-interface ShipmentDetail {
-  id: string;
-  reference: string;
-  shipperName: string | null;
-  shipperAddress: string | null;
-  consigneeName: string | null;
-  consigneeAddress: string | null;
-  notifyParty: string | null;
-  originPort: string | null;
-  destinationPort: string | null;
-  cargoDescription: string | null;
-  hsCodePrimary: string | null;
-  grossWeight: number | null;
-  netWeight: number | null;
-  weightUnit: string | null;
-  numberOfPackages: number | null;
-  incoterms: string | null;
-  invoiceNumber: string | null;
-  invoiceValue: number | null;
-  currency: string | null;
-  awbOrBlNumber: string | null;
-  vesselOrFlight: string | null;
-  shipmentType: string | null;
-  overallConfidence: Confidence;
-  shieldStatus: ShieldStatus;
-  shieldResults: Record<string, unknown>;
-  status: ShipmentStatus;
-  extractedFields: Record<string, unknown>;
-  confidenceScores: Record<string, unknown>;
-  lineItems: LineItem[];
-  complianceEvents: ComplianceEvent[];
-  documents: Document[];
-  createdAt: string;
-  updatedAt: string;
-  eta: string | null;
-  etd: string | null;
-  reviewedAt: string | null;
-  reviewNotes: string | null;
-  source: string;
-  orgId: string;
-}
-
-interface AnalyticsData {
-  processed: number;
-  automationRate: number;
-  avgTimeSeconds: number;
-  errorRate: number;
-  shieldSummary: { pass: number; hold: number; fail: number; pending: number };
-  queueSize: number;
-  exceptions: number;
-  recentTrend: Array<{ date: string; count: number }>;
-  topOriginPorts: Array<{ port: string; count: number }>;
-  avgConfidenceBySource: Record<string, Record<string, number>>;
-  shieldPassRate: number;
-  pipelineStatus: {
-    pending: number;
-    review_required: number;
-    approved: number;
-    rejected: number;
-    cw_draft_created: number;
-    in_cargowise: number;
-    error: number;
-  };
-}
-
-interface CwExecution {
-  id: string;
-  shipmentId: string;
-  executionType: string;
-  status: string;
-  durationMs: number | null;
-  screenshotUrl: string | null;
-  errorMessage: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  shipment: {
-    id: string;
-    reference: string;
-    shipperName: string | null;
-    status: string;
-  };
-}
-
-interface WsNotification {
-  type?: string;
-  message?: string;
-  event?: string;
-  reference?: string;
-  [key: string]: unknown;
-}
-
-/* ══════════════════════════════════════════════
-   Data Fetching Hook
-   ══════════════════════════════════════════════ */
-
-function useApi<T>(url: string, defaultValue: T) {
-  const [state, setState] = useState<{ data: T; loading: boolean; error: string | null }>({
-    data: defaultValue, loading: true, error: null,
-  });
-  const [fetchKey, setFetchKey] = useState(0);
-
-  const refetch = useCallback(() => {
-    setFetchKey((k) => k + 1);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(url)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => {
-        if (!cancelled) setState({ data: d, loading: false, error: null });
-      })
-      .catch((e) => {
-        if (!cancelled) setState({ data: defaultValue, loading: false, error: e.message });
-      });
-    return () => { cancelled = true; };
-  }, [url, fetchKey]);
-
-  return { data: state.data, loading: state.loading, error: state.error, refetch };
-}
-
-/* ══════════════════════════════════════════════
-   Helpers
-   ══════════════════════════════════════════════ */
-
-function formatZAR(n: number) {
-  return "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function relativeTime(iso: string) {
+function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
+  if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function formatSeconds(s: number) {
+function formatSeconds(s: number): string {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}m ${sec}s`;
 }
 
-function ShieldBadge({ status }: { status: ShieldStatus }) {
-  const map: Record<ShieldStatus, { bg: string; text: string; label: string }> = {
-    pass: { bg: "bg-emerald-50", text: "text-emerald-700", label: "PASS" },
-    hold: { bg: "bg-amber-50", text: "text-amber-700", label: "HOLD" },
-    fail: { bg: "bg-red-50", text: "text-red-700", label: "FAIL" },
-    pending: { bg: "bg-slate-100", text: "text-slate-500", label: "PENDING" },
-  };
-  const s = map[status] || map.pending;
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${s.bg} ${s.text}`}>
-      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      {s.label}
-    </span>
-  );
+function confidenceColor(pct: number): string {
+  if (pct >= 85) return COLORS.success;
+  if (pct >= 65) return '#F59E0B';
+  return COLORS.error;
 }
 
-function StatusBadge({ status }: { status: ShipmentStatus }) {
-  const map: Record<ShipmentStatus, { bg: string; text: string; label: string }> = {
-    pending: { bg: "bg-slate-100", text: "text-slate-600", label: "Pending" },
-    review_required: { bg: "bg-amber-50", text: "text-amber-700", label: "Review" },
-    approved: { bg: "bg-emerald-50", text: "text-emerald-700", label: "Approved" },
-    rejected: { bg: "bg-red-50", text: "text-red-700", label: "Rejected" },
-    in_cargowise: { bg: "bg-teal-50", text: "text-teal-700", label: "In CW" },
-    cw_draft_created: { bg: "bg-amber-50", text: "text-amber-800", label: "CW Draft" },
-    error: { bg: "bg-red-50", text: "text-red-700", label: "Error" },
-  };
-  const s = map[status] || map.pending;
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${s.bg} ${s.text}`}>{s.label}</span>;
+function confidenceBgColor(pct: number): string {
+  if (pct >= 85) return '#D1FAE5';
+  if (pct >= 65) return '#FEF3C7';
+  return '#FEE2E2';
 }
 
-function ConfidenceBadge({ level }: { level: Confidence }) {
-  const map: Record<Confidence, { text: string; dot: string }> = {
-    high: { text: "text-emerald-600", dot: "bg-emerald-500" },
-    medium: { text: "text-amber-600", dot: "bg-amber-500" },
-    low: { text: "text-red-600", dot: "bg-red-500" },
-  };
-  const s = map[level] || map.medium;
-  return (
-    <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${s.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-      {level.charAt(0).toUpperCase() + level.slice(1)}
-    </span>
-  );
+function confidenceLabel(pct: number): string {
+  if (pct >= 85) return 'High';
+  if (pct >= 65) return 'Medium';
+  return 'Low';
 }
 
-function fileIcon(fileType: string) {
-  if (fileType === "pdf") return <FileText size={14} className="text-red-500" />;
-  if (["xlsx", "xls", "csv"].includes(fileType)) return <FileSpreadsheet size={14} className="text-emerald-600" />;
-  if (["jpg", "jpeg", "png"].includes(fileType)) return <FileText size={14} className="text-sky-500" />;
-  if (["docx", "doc"].includes(fileType)) return <FileType size={14} className="text-sky-600" />;
-  return <File size={14} className="text-slate-400" />;
+function getSourceIcon(source: IngestSource) {
+  switch (source) {
+    case 'email': return { icon: Mail, label: 'Email' };
+    case 'whatsapp': return { icon: MessageCircle, label: 'WhatsApp' };
+    case 'upload': return { icon: Upload, label: 'Upload' };
+  }
 }
 
-/* ══════════════════════════════════════════════
-   Sidebar
-   ══════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ══════════════════════════════════════════════════════════════════════ */
 
-function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobileClose }: {
-  view: ViewMode; setView: (v: ViewMode) => void; collapsed: boolean; toggleCollapse: () => void;
-  mobileOpen: boolean; onMobileClose: () => void;
+function Sidebar({
+  view,
+  setView,
+  collapsed,
+  toggleCollapse,
+  mobileOpen,
+  onMobileClose,
+}: {
+  view: ViewMode;
+  setView: (v: ViewMode) => void;
+  collapsed: boolean;
+  toggleCollapse: () => void;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
 }) {
-  const sections = [
-    { label: "Operations", items: [
-      { key: "dashboard" as ViewMode, icon: LayoutDashboard, label: "Dashboard" },
-      { key: "shipments" as ViewMode, icon: PackageSearch, label: "Shipment Queue" },
-      { key: "compliance" as ViewMode, icon: ShieldCheck, label: "Compliance Audit" },
-    ]},
-    { label: "Intelligence", items: [
-      { key: "wiselayer" as ViewMode, icon: BarChart3, label: "WiseLayer" },
-      { key: "cargowise" as ViewMode, icon: Database, label: "CargoWise" },
-    ]},
-    { label: "System", items: [
-      { key: "settings" as ViewMode, icon: Settings, label: "Settings" },
-    ]},
+  const navItems: { key: ViewMode; icon: typeof LayoutDashboard; label: string }[] = [
+    { key: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { key: 'cargoflow', icon: PackageSearch, label: 'CargoFlow AI' },
+    { key: 'wiselayer', icon: BarChart3, label: 'WiseLayer' },
+    { key: 'settings', icon: Settings, label: 'Settings' },
   ];
 
   const sidebarContent = (
     <aside
-      className="flex flex-col border-r transition-all duration-200 h-full"
-      style={{ width: collapsed ? 56 : 240, backgroundColor: "#1A2332", borderColor: "#243040" }}
+      className="flex flex-col h-full"
+      style={{
+        width: collapsed ? 56 : 240,
+        backgroundColor: COLORS.navy,
+        borderRight: `1px solid ${COLORS.navyBorder}`,
+        transition: 'width 200ms cubic-bezier(0.4,0,0.2,1)',
+      }}
     >
-      <div className="flex items-center h-14 px-4 border-b" style={{ borderColor: "#243040" }}>
+      {/* Logo */}
+      <div
+        className="flex items-center h-14 px-4 shrink-0"
+        style={{ borderBottom: `1px solid ${COLORS.navyBorder}` }}
+      >
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <img src="/cargoiq-logo.jpg" alt="CargoIQ Logo" className="flex-shrink-0 rounded" style={{ width: 28, height: 28, objectFit: "cover" }} />
+          <img
+            src="/cargoiq-logo.jpg"
+            alt="CargoIQ Logo"
+            className="shrink-0 rounded"
+            style={{ width: 28, height: 28, objectFit: 'cover' }}
+          />
           {!collapsed && (
             <div className="flex flex-col min-w-0">
-              <span className="text-sm font-semibold tracking-tight truncate">
-                <span className="text-white">CARGO</span><span style={{ color: "#E6A34D" }}>iQ</span>
+              <span className="text-sm font-bold tracking-tight truncate">
+                <span style={{ color: COLORS.textPrimaryDark }}>CARGO</span>
+                <span style={{ color: COLORS.orange }}>iQ</span>
               </span>
-              <span className="text-[10px] leading-none" style={{ color: "#6B7E92" }}>Compliance Platform</span>
+              <span
+                className="text-[10px] leading-none"
+                style={{ color: COLORS.textSecondaryDark }}
+              >
+                Compliance Platform
+              </span>
             </div>
           )}
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto py-3" style={{ scrollbarWidth: "thin", scrollbarColor: "#243040 transparent" }}>
-        {sections.map((sec) => (
-          <div key={sec.label} className="mb-3">
-            {!collapsed && (
-              <div className="px-5 mb-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>{sec.label}</div>
-            )}
-            {sec.items.map((item) => {
-              const active = view === item.key || (item.key === "shipments" && view === "shipment-detail");
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => { setView(item.key); onMobileClose(); }}
-                  className="flex items-center gap-2.5 w-full px-4 py-2 mx-2 rounded text-[13px] font-medium transition-colors"
-                  style={{
-                    width: collapsed ? 40 : "calc(100% - 16px)",
-                    justifyContent: collapsed ? "center" : "flex-start",
-                    marginLeft: collapsed ? 8 : undefined,
-                    marginRight: collapsed ? 8 : undefined,
-                    paddingLeft: collapsed ? 0 : 16,
-                    color: active ? "#C8D3DF" : "#6B7E92",
-                    backgroundColor: active ? "#243447" : "transparent",
-                  }}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <item.icon size={18} />
-                  {!collapsed && <span className="truncate">{item.label}</span>}
-                </button>
-              );
-            })}
+
+      {/* Navigation */}
+      <nav
+        className="flex-1 overflow-y-auto py-3"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: `${COLORS.navyBorder} transparent` }}
+      >
+        {!collapsed && (
+          <div
+            className="px-5 mb-2 text-[10px] font-semibold uppercase tracking-wider"
+            style={{ color: COLORS.textSecondaryDark }}
+          >
+            Navigation
           </div>
-        ))}
+        )}
+        {navItems.map((item) => {
+          const active = view === item.key;
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.key}
+              onClick={() => {
+                setView(item.key);
+                onMobileClose();
+              }}
+              className="flex items-center gap-2.5 w-full transition-colors"
+              style={{
+                padding: collapsed ? '8px 0' : '8px 16px',
+                margin: collapsed ? '2px 8px' : '2px 8px',
+                borderRadius: 6,
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                width: collapsed ? 40 : 'calc(100% - 16px)',
+                color: active ? COLORS.textPrimaryDark : COLORS.textSecondaryDark,
+                backgroundColor: active ? COLORS.navyLight : 'transparent',
+                borderLeft: active ? `3px solid ${COLORS.orange}` : '3px solid transparent',
+                fontSize: 13,
+                fontWeight: active ? 600 : 500,
+              }}
+              title={collapsed ? item.label : undefined}
+            >
+              <Icon size={18} />
+              {!collapsed && <span className="truncate">{item.label}</span>}
+            </button>
+          );
+        })}
       </nav>
+
+      {/* Collapse toggle */}
       <button
         onClick={toggleCollapse}
-        className="hidden md:flex items-center justify-center h-10 border-t transition-colors hover:bg-[#1F2D3D]"
-        style={{ borderColor: "#243040", color: "#6B7E92" }}
+        className="hidden md:flex items-center justify-center h-10 shrink-0 transition-colors"
+        style={{
+          borderTop: `1px solid ${COLORS.navyBorder}`,
+          color: COLORS.textSecondaryDark,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.navyLight)}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
       >
         {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
@@ -407,227 +277,258 @@ function Sidebar({ view, setView, collapsed, toggleCollapse, mobileOpen, onMobil
 
   return (
     <>
-      <div className="hidden md:block fixed top-0 left-0 bottom-0 z-40">{sidebarContent}</div>
+      {/* Desktop sidebar */}
+      <div className="hidden md:block fixed top-0 left-0 bottom-0 z-40">
+        {sidebarContent}
+      </div>
+      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0" style={{ backgroundColor: "rgba(0,0,0,0.5)" }} onClick={onMobileClose} />
-          <div className="relative z-10 h-full" style={{ width: 240 }}>{sidebarContent}</div>
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+            onClick={onMobileClose}
+          />
+          <div className="relative z-10 h-full" style={{ width: 240 }}>
+            {sidebarContent}
+          </div>
         </div>
       )}
     </>
   );
 }
 
-/* ══════════════════════════════════════════════
-   Top Nav
-   ══════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════
+   TOP NAV
+   ══════════════════════════════════════════════════════════════════════ */
 
-function TopNav({ view, collapsed, onToggleMobileSidebar, onQuickUpload, wsConnected, notificationCount }: {
-  view: ViewMode; collapsed: boolean; onToggleMobileSidebar: () => void; onQuickUpload: () => void;
-  wsConnected: boolean; notificationCount: number;
+function TopNav({
+  view,
+  collapsed,
+  onToggleMobileSidebar,
+}: {
+  view: ViewMode;
+  collapsed: boolean;
+  onToggleMobileSidebar: () => void;
 }) {
-  const viewLabels: Record<ViewMode, string> = {
-    dashboard: "Dashboard",
-    shipments: "Shipment Queue",
-    "shipment-detail": "Shipment Detail",
-    compliance: "Compliance Audit",
-    wiselayer: "WiseLayer — Cost Intelligence",
-    cargowise: "CargoWise Integration",
-    settings: "Settings",
+  const labels: Record<ViewMode, string> = {
+    dashboard: 'Dashboard',
+    cargoflow: 'CargoFlow AI — Review & Release',
+    wiselayer: 'WiseLayer — Cost & Compliance Guard',
+    settings: 'Settings',
   };
 
   return (
     <header
-      className="fixed top-0 right-0 z-30 flex items-center h-14 px-5 gap-3 border-b transition-all duration-200"
-      style={{ left: 0, backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}
+      className="fixed top-0 right-0 z-30 flex items-center h-14 px-5 gap-3"
+      style={{
+        left: 0,
+        backgroundColor: COLORS.surface,
+        borderBottom: `1px solid ${COLORS.borderLight}`,
+        transition: 'left 200ms',
+      }}
     >
-      <button className="md:hidden p-1.5 rounded hover:bg-[#E8ECF1] transition-colors" style={{ color: "#6B7E92" }} onClick={onToggleMobileSidebar}>
+      <button
+        className="md:hidden p-1.5 rounded transition-colors"
+        style={{ color: COLORS.textTertiary }}
+        onClick={onToggleMobileSidebar}
+      >
         <Menu size={20} />
       </button>
-      <h2 className="text-[15px] font-semibold truncate" style={{ color: "#0D1B2A" }}>{viewLabels[view]}</h2>
+      <h2 className="text-[15px] font-semibold truncate" style={{ color: COLORS.textPrimaryLight }}>
+        {labels[view]}
+      </h2>
       <div className="flex-1" />
-      {/* WebSocket indicator */}
-      <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: wsConnected ? "#15632A" : "#9B1C1C" }}>
-        {wsConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
-        <span className="hidden sm:inline">{wsConnected ? "Live" : "Offline"}</span>
-      </div>
-      <button onClick={onQuickUpload} className="p-1.5 rounded hover:bg-[#E8ECF1] transition-colors" style={{ color: "#6B7E92" }} title="Upload Document">
+      <button
+        className="p-1.5 rounded transition-colors"
+        style={{ color: COLORS.textTertiary }}
+        title="Upload Document"
+      >
         <Upload size={18} />
       </button>
-      <button className="relative p-1.5 rounded hover:bg-[#E8ECF1] transition-colors" style={{ color: "#6B7E92" }}>
+      <button className="relative p-1.5 rounded transition-colors" style={{ color: COLORS.textTertiary }}>
         <Bell size={18} />
-        {notificationCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1" style={{ backgroundColor: "#B8860B" }}>
-            {notificationCount > 99 ? "99+" : notificationCount}
-          </span>
-        )}
+        <span
+          className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1"
+          style={{ backgroundColor: COLORS.accent }}
+        >
+          3
+        </span>
       </button>
-      <div className="hidden sm:flex items-center gap-2 pl-2 border-l" style={{ borderColor: "#C8D0DA" }}>
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold" style={{ backgroundColor: "#B8860B", color: "#FFF" }}>JM</div>
-        <span className="text-[13px] font-medium" style={{ color: "#0D1B2A" }}>J. Mokoena</span>
+      <div
+        className="hidden sm:flex items-center gap-2 pl-2"
+        style={{ borderLeft: `1px solid ${COLORS.borderLight}` }}
+      >
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+          style={{ backgroundColor: COLORS.accent, color: '#FFF' }}
+        >
+          JM
+        </div>
+        <span className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
+          J. Mokoena
+        </span>
       </div>
     </header>
   );
 }
 
-/* ══════════════════════════════════════════════
-   Notification Toast
-   ══════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════
+   DASHBOARD VIEW
+   ══════════════════════════════════════════════════════════════════════ */
 
-function NotificationToast({ notification, onDismiss }: { notification: WsNotification; onDismiss: () => void }) {
-  return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border shadow-lg p-4 animate-in slide-in-from-bottom-2" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-      <div className="flex items-start gap-3">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FEF6E7" }}>
-          <Radio size={16} style={{ color: "#B8860B" }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-semibold" style={{ color: "#0D1B2A" }}>
-            {notification.type === "shipment:created" ? "New Shipment" :
-             notification.type === "shield:completed" ? "Shield Complete" :
-             notification.type === "cw:draft_created" ? "CW Draft Created" :
-             notification.type === "cw:draft_failed" ? "CW Draft Failed" :
-             notification.type === "email:ingested" ? "Email Ingested" :
-             notification.type === "shipment:approved" ? "Shipment Approved" :
-             notification.type === "shipment:rejected" ? "Shipment Rejected" :
-             "Notification"}
-          </div>
-          <div className="text-[12px] mt-0.5" style={{ color: "#6B7E92" }}>
-            {notification.message || notification.reference || "Event received"}
-          </div>
-        </div>
-        <button onClick={onDismiss} className="flex-shrink-0 p-1 rounded hover:bg-[#E8ECF1]" style={{ color: "#6B7E92" }}>
-          <X size={14} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   Dashboard View
-   ══════════════════════════════════════════════ */
-
-function DashboardView({ setView, onSelectShipment }: { setView: (v: ViewMode) => void; onSelectShipment: (id: string) => void }) {
-  const { data: analytics, loading: analyticsLoading } = useApi<AnalyticsData>("/api/analytics", {
-    processed: 0, automationRate: 0, avgTimeSeconds: 0, errorRate: 0,
-    shieldSummary: { pass: 0, hold: 0, fail: 0, pending: 0 },
-    queueSize: 0, exceptions: 0, recentTrend: [], topOriginPorts: [],
-    avgConfidenceBySource: {}, shieldPassRate: 0,
-    pipelineStatus: { pending: 0, review_required: 0, approved: 0, rejected: 0, cw_draft_created: 0, in_cargowise: 0, error: 0 },
-  });
-
-  const { data: recentShipments, loading: shipmentsLoading } = useApi<ShipmentListResponse>("/api/shipments?limit=5", { items: [], total: 0, page: 1, limit: 5 });
+function DashboardView() {
+  const stats = mockOverviewStats;
+  const recentShipments = mockShipments.slice(0, 8);
 
   const kpis = [
-    { label: "Processed Today", value: analytics.processed, change: analytics.recentTrend.length > 1 ? `+${analytics.recentTrend[analytics.recentTrend.length - 1]?.count || 0}` : "0", up: true, icon: FileText, color: "#1A4971", bg: "#EBF3FB" },
-    { label: "Automation Rate", value: `${Math.round(analytics.automationRate * 100)}%`, change: "+3.2%", up: true, icon: Zap, color: "#15632A", bg: "#EBF5EE" },
-    { label: "Avg Processing", value: formatSeconds(analytics.avgTimeSeconds), change: "-18%", up: true, icon: Clock, color: "#7A4F00", bg: "#FEF6E7" },
-    { label: "Shield Exceptions", value: analytics.exceptions, change: analytics.exceptions > 0 ? `+${analytics.exceptions}` : "0", up: analytics.exceptions === 0, icon: AlertTriangle, color: "#9B1C1C", bg: "#FEF2F2" },
+    {
+      label: 'Queue Size',
+      value: stats.queueSize,
+      change: '+12%',
+      up: true,
+      icon: Package,
+      color: COLORS.navyLight,
+      bg: '#EBF3FB',
+    },
+    {
+      label: 'Automation Rate',
+      value: `${Math.round(stats.automationRate * 100)}%`,
+      change: '+3.2%',
+      up: true,
+      icon: Zap,
+      color: COLORS.successDark,
+      bg: COLORS.successBg,
+    },
+    {
+      label: 'Avg Processing',
+      value: formatSeconds(stats.avgTimeSeconds),
+      change: '-18%',
+      up: true,
+      icon: Clock,
+      color: COLORS.warningDark,
+      bg: COLORS.warningBg,
+    },
+    {
+      label: 'Shield Exceptions',
+      value: stats.exceptions,
+      change: '+5',
+      up: false,
+      icon: AlertTriangle,
+      color: COLORS.errorDark,
+      bg: COLORS.errorBg,
+    },
   ];
 
-  const ps = analytics.pipelineStatus;
-  const pipelineSteps = [
-    { label: "Email", count: analytics.queueSize, status: "active" as const, icon: "📧" },
-    { label: "Classify", count: ps.pending, status: ps.pending > 0 ? "active" as const : "complete" as const, icon: "🏷️" },
-    { label: "Extract", count: ps.review_required, status: ps.review_required > 0 ? "active" as const : "complete" as const, icon: "📄" },
-    { label: "Shield", count: analytics.shieldSummary.pass, status: "complete" as const, icon: "🛡️" },
-    { label: "Review", count: ps.review_required, status: ps.review_required > 0 ? "pending" as const : "complete" as const, icon: "👁️" },
-    { label: "CW", count: ps.cw_draft_created, status: ps.cw_draft_created > 0 ? "active" as const : "pending" as const, icon: "🔗" },
-  ];
-
-  const ss = analytics.shieldSummary;
+  const ss = stats.shieldSummary;
   const shieldTotal = ss.pass + ss.hold + ss.fail + ss.pending;
-  const shieldSummary = [
-    { label: "Pass", count: ss.pass, color: "bg-emerald-500", pct: shieldTotal > 0 ? Math.round((ss.pass / shieldTotal) * 100) : 0 },
-    { label: "Hold", count: ss.hold, color: "bg-amber-500", pct: shieldTotal > 0 ? Math.round((ss.hold / shieldTotal) * 100) : 0 },
-    { label: "Fail", count: ss.fail, color: "bg-red-500", pct: shieldTotal > 0 ? Math.round((ss.fail / shieldTotal) * 100) : 0 },
-    { label: "Pending", count: ss.pending, color: "bg-slate-400", pct: shieldTotal > 0 ? Math.round((ss.pending / shieldTotal) * 100) : 0 },
+  const shieldItems = [
+    { label: 'Pass', count: ss.pass, color: COLORS.success, pct: shieldTotal > 0 ? Math.round((ss.pass / shieldTotal) * 100) : 0 },
+    { label: 'Hold', count: ss.hold, color: '#F59E0B', pct: shieldTotal > 0 ? Math.round((ss.hold / shieldTotal) * 100) : 0 },
+    { label: 'Fail', count: ss.fail, color: COLORS.error, pct: shieldTotal > 0 ? Math.round((ss.fail / shieldTotal) * 100) : 0 },
+    { label: 'Pending', count: ss.pending, color: '#94A3B8', pct: shieldTotal > 0 ? Math.round((ss.pending / shieldTotal) * 100) : 0 },
   ];
 
   return (
     <div className="p-6 max-w-[1440px]">
-      {analyticsLoading && <div className="text-[13px] mb-4" style={{ color: "#6B7E92" }}>Loading analytics...</div>}
-      {/* KPIs */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ backgroundColor: kpi.bg }}>
-                <kpi.icon size={18} style={{ color: kpi.color }} />
-              </div>
-              <span className={`inline-flex items-center gap-0.5 text-[12px] font-semibold ${kpi.up ? "text-emerald-600" : "text-red-600"}`}>
-                {kpi.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                {kpi.change}
-              </span>
-            </div>
-            <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>{kpi.value}</div>
-            <div className="text-[11px] font-medium uppercase tracking-wider mt-0.5" style={{ color: "#6B7E92" }}>{kpi.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Processing Pipeline */}
-      <div className="rounded-lg border mb-6" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>PROCESSING PIPELINE</span>
-        </div>
-        <div className="p-4">
-          <div className="flex items-center justify-between gap-1 overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
-            {pipelineSteps.map((step, i) => (
-              <div key={step.label} className="flex items-center gap-1 flex-shrink-0">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <div
+              key={kpi.label}
+              className="rounded-lg border p-5"
+              style={{ backgroundColor: COLORS.surface, borderColor: COLORS.borderLight }}
+            >
+              <div className="flex items-start justify-between mb-3">
                 <div
-                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-lg border min-w-[80px]"
-                  style={{
-                    backgroundColor: step.status === "active" ? "#EBF3FB" : step.status === "complete" ? "#EBF5EE" : "#F1F4F8",
-                    borderColor: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#C8D0DA",
-                  }}
+                  className="w-10 h-10 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: kpi.bg }}
                 >
-                  <span className="text-lg">{step.icon}</span>
-                  <span className="text-[11px] font-semibold" style={{ color: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#6B7E92" }}>{step.label}</span>
-                  <span className="text-[16px] font-bold" style={{ color: "#0D1B2A" }}>{step.count}</span>
-                  <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full" style={{
-                    color: step.status === "active" ? "#1A4971" : step.status === "complete" ? "#15632A" : "#6B7E92",
-                    backgroundColor: step.status === "active" ? "#D6E8F7" : step.status === "complete" ? "#C6E4CE" : "#E8ECF1",
-                  }}>{step.status}</span>
+                  <Icon size={20} style={{ color: kpi.color }} />
                 </div>
-                {i < pipelineSteps.length - 1 && <ArrowRight size={16} className="flex-shrink-0" style={{ color: "#9AAAB8" }} />}
+                <span
+                  className={`inline-flex items-center gap-0.5 text-[12px] font-semibold ${
+                    kpi.up ? 'text-emerald-600' : 'text-red-600'
+                  }`}
+                >
+                  {kpi.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                  {kpi.change}
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="text-2xl font-bold" style={{ color: COLORS.textPrimaryLight }}>
+                {kpi.value}
+              </div>
+              <div
+                className="text-[11px] font-medium uppercase tracking-wider mt-1"
+                style={{ color: COLORS.textTertiary }}
+              >
+                {kpi.label}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Recent Shipments */}
-        <div className="lg:col-span-2 rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>RECENT SHIPMENTS</span>
-            <button onClick={() => setView("shipments")} className="text-[12px] font-medium hover:underline" style={{ color: "#B8860B" }}>View all →</button>
+        {/* Recent Shipments Table */}
+        <div className="lg:col-span-2 rounded-lg border" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.borderLight }}>
+          <div
+            className="px-4 py-3 border-b flex items-center justify-between"
+            style={{ borderColor: COLORS.borderSubtle }}
+          >
+            <span className="text-[13px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textSecondaryLight }}>
+              Recent Shipments
+            </span>
+            <span className="text-[12px] font-medium" style={{ color: COLORS.accent }}>View all →</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="border-b" style={{ borderColor: "#C8D0DA" }}>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Reference</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Route</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Shield</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Status</th>
+                <tr style={{ backgroundColor: COLORS.canvas }}>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>Reference</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>Shipper</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>Route</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>Confidence</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {shipmentsLoading ? (
-                  <tr><td colSpan={4} className="px-4 py-6 text-center text-[12px]" style={{ color: "#6B7E92" }}>Loading...</td></tr>
-                ) : recentShipments.items.length === 0 ? (
-                  <tr><td colSpan={4} className="px-4 py-6 text-center text-[12px]" style={{ color: "#6B7E92" }}>No shipments yet. Upload a document to get started.</td></tr>
-                ) : recentShipments.items.map((s) => (
-                  <tr key={s.id} onClick={() => onSelectShipment(s.id)} className="border-b hover:bg-[#F1F4F8] transition-colors cursor-pointer" style={{ borderColor: "#DDE3EA" }}>
-                    <td className="px-4 py-2.5 font-medium" style={{ color: "#0D1B2A" }}>
-                      <span className="font-mono text-[12px]">{s.reference}</span>
+                {recentShipments.map((s) => (
+                  <tr
+                    key={s.id}
+                    className="border-b transition-colors cursor-pointer"
+                    style={{ borderColor: COLORS.borderSubtle }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.canvas)}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <td className="px-4 py-2.5 font-mono text-[12px] font-medium" style={{ color: COLORS.orange }}>
+                      {s.reference}
                     </td>
-                    <td className="px-4 py-2.5" style={{ color: "#3D5166" }}>{s.originPort || "—"} → {s.destinationPort || "—"}</td>
-                    <td className="px-4 py-2.5"><ShieldBadge status={s.shieldStatus} /></td>
-                    <td className="px-4 py-2.5"><StatusBadge status={s.status} /></td>
+                    <td className="px-4 py-2.5 max-w-[180px] truncate" style={{ color: COLORS.textPrimaryLight }}>
+                      {s.shipperName || '—'}
+                    </td>
+                    <td className="px-4 py-2.5" style={{ color: COLORS.textSecondaryLight }}>
+                      {s.originPort || '—'} → {s.destinationPort || '—'}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: confidenceColor(s.confidencePercent) }}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: confidenceColor(s.confidencePercent) }} />
+                        {s.confidencePercent}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                        style={{
+                          backgroundColor: s.status === 'review_required' ? COLORS.warningBg : s.status === 'approved' || s.status === 'cw_draft_created' ? COLORS.successBg : s.status === 'rejected' || s.status === 'error' ? COLORS.errorBg : COLORS.surfaceSubtle,
+                          color: s.status === 'review_required' ? COLORS.warningDark : s.status === 'approved' || s.status === 'cw_draft_created' ? COLORS.successDark : s.status === 'rejected' || s.status === 'error' ? COLORS.errorDark : COLORS.textTertiary,
+                        }}
+                      >
+                        {s.status === 'review_required' ? 'Review' : s.status === 'cw_draft_created' ? 'CW Draft' : s.status === 'in_cargowise' ? 'In CW' : s.status.charAt(0).toUpperCase() + s.status.slice(1).replace(/_/g, ' ')}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -635,29 +536,51 @@ function DashboardView({ setView, onSelectShipment }: { setView: (v: ViewMode) =
           </div>
         </div>
 
-        {/* Shield Summary */}
-        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>COMPLIANCE SHIELD</span>
+        {/* Compliance Shield Summary */}
+        <div className="rounded-lg border" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.borderLight }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: COLORS.borderSubtle }}>
+            <span className="text-[13px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textSecondaryLight }}>
+              Compliance Shield
+            </span>
           </div>
           <div className="p-4 space-y-4">
-            {shieldSummary.map((item) => (
+            {shieldItems.map((item) => (
               <div key={item.label}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[12px] font-medium" style={{ color: "#3D5166" }}>{item.label}</span>
-                  <span className="text-[13px] font-bold" style={{ color: "#0D1B2A" }}>{item.count}</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[12px] font-medium" style={{ color: COLORS.textSecondaryLight }}>
+                    {item.label}
+                  </span>
+                  <span className="text-[13px] font-bold" style={{ color: COLORS.textPrimaryLight }}>
+                    {item.count}{' '}
+                    <span className="text-[11px] font-normal" style={{ color: COLORS.textTertiary }}>
+                      ({item.pct}%)
+                    </span>
+                  </span>
                 </div>
-                <div className="w-full h-2 rounded-full" style={{ backgroundColor: "#E8ECF1" }}>
-                  <div className={`h-2 rounded-full ${item.color}`} style={{ width: `${item.pct}%` }} />
+                <div className="w-full h-2 rounded-full" style={{ backgroundColor: COLORS.surfaceSubtle }}>
+                  <div
+                    className="h-2 rounded-full transition-all"
+                    style={{ width: `${item.pct}%`, backgroundColor: item.color }}
+                  />
                 </div>
               </div>
             ))}
           </div>
-          {analytics.shieldSummary.hold > 0 && (
+          {ss.hold > 0 && (
             <div className="px-4 pb-4">
-              <div className="rounded-md p-3 text-[12px]" style={{ backgroundColor: "#FEF6E7", borderColor: "#E8B84B", color: "#7A4F00", border: "1px solid #E8B84B" }}>
-                <div className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle size={13} />{analytics.shieldSummary.hold} shipments on HOLD</div>
-                <div style={{ color: "#7A4F00", opacity: 0.8 }}>Requires manual review before CargoWise submission</div>
+              <div
+                className="rounded-md p-3 text-[12px]"
+                style={{
+                  backgroundColor: COLORS.warningBg,
+                  border: `1px solid ${COLORS.orangeBorder}`,
+                  color: COLORS.warningDark,
+                }}
+              >
+                <div className="flex items-center gap-1.5 font-semibold mb-1">
+                  <AlertTriangle size={13} />
+                  {ss.hold} shipments on HOLD
+                </div>
+                <div style={{ opacity: 0.85 }}>Requires manual review before CargoWise submission</div>
               </div>
             </div>
           )}
@@ -667,1024 +590,743 @@ function DashboardView({ setView, onSelectShipment }: { setView: (v: ViewMode) =
   );
 }
 
-/* ══════════════════════════════════════════════
-   Shipment Queue View
-   ══════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════
+   CARGOFLOW AI VIEW — Split-Screen Review & Release Workspace
+   ══════════════════════════════════════════════════════════════════════ */
 
-function ShipmentQueueView({ onSelectShipment, wsCreatedShipment }: {
-  onSelectShipment: (id: string) => void;
-  wsCreatedShipment: ShipmentSummary | null;
-}) {
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [shieldFilter, setShieldFilter] = useState<string>("all");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const limit = 20;
-
-  const queryParams = new URLSearchParams();
-  if (statusFilter !== "all") queryParams.set("status", statusFilter);
-  if (shieldFilter !== "all") queryParams.set("shield", shieldFilter);
-  if (search) queryParams.set("search", search);
-  queryParams.set("page", String(page));
-  queryParams.set("limit", String(limit));
-
-  const { data, loading, refetch } = useApi<ShipmentListResponse>(`/api/shipments?${queryParams.toString()}`, { items: [], total: 0, page: 1, limit });
-
-  const items = wsCreatedShipment ? [wsCreatedShipment, ...data.items.filter((i) => i.id !== wsCreatedShipment.id)] : data.items;
-  const totalPages = Math.ceil(data.total / limit);
-
-  // Re-fetch when filters change
-  useEffect(() => { refetch(); }, [statusFilter, shieldFilter, search, page]);
-
+function ConfidenceBar({ percent }: { percent: number }) {
   return (
-    <div className="p-6 max-w-[1440px]">
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="relative flex-1 min-w-[200px] max-w-[320px]">
-          <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#9AAAB8" }} />
-          <input
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by reference, shipper, consignee..."
-            className="w-full pl-8 pr-3 py-2 text-[13px] rounded-md border outline-none transition-colors focus:border-[#B8860B] focus:ring-2 focus:ring-[#FDF3DC]"
-            style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}
-          />
-        </div>
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
-          <option value="all">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="review_required">Review Required</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="cw_draft_created">CW Draft</option>
-          <option value="error">Error</option>
-        </select>
-        <select value={shieldFilter} onChange={(e) => { setShieldFilter(e.target.value); setPage(1); }} className="px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
-          <option value="all">All Shield</option>
-          <option value="pass">Pass</option>
-          <option value="hold">Hold</option>
-          <option value="fail">Fail</option>
-          <option value="pending">Pending</option>
-        </select>
-        <div className="ml-auto text-[12px]" style={{ color: "#6B7E92" }}>{data.total} shipment{data.total !== 1 ? "s" : ""}</div>
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 rounded-full" style={{ backgroundColor: COLORS.surfaceSubtle }}>
+        <div
+          className="h-1.5 rounded-full"
+          style={{ width: `${percent}%`, backgroundColor: confidenceColor(percent) }}
+        />
       </div>
+      <span
+        className="text-[11px] font-semibold tabular-nums"
+        style={{ color: confidenceColor(percent) }}
+      >
+        {percent}%
+      </span>
+    </div>
+  );
+}
 
-      {/* Table */}
-      <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr style={{ backgroundColor: "#F1F4F8" }}>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Reference</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Shipper</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Route</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Type</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Confidence</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Shield</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Status</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Docs</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Age</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>Loading shipments...</td></tr>
-              ) : items.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>No shipments found.</td></tr>
-              ) : items.map((s) => (
-                <tr key={s.id} onClick={() => onSelectShipment(s.id)} className="border-b hover:bg-[#F1F4F8] transition-colors cursor-pointer" style={{ borderColor: "#DDE3EA" }}>
-                  <td className="px-4 py-2.5 font-mono text-[12px] font-medium" style={{ color: "#B8860B" }}>{s.reference}</td>
-                  <td className="px-4 py-2.5 max-w-[180px] truncate" style={{ color: "#0D1B2A" }}>{s.shipperName || "—"}</td>
-                  <td className="px-4 py-2.5" style={{ color: "#3D5166" }}>{s.originPort || "—"} → {s.destinationPort || "—"}</td>
-                  <td className="px-4 py-2.5 capitalize" style={{ color: "#3D5166" }}>{(s.shipmentType || "").replace(/_/g, " ")}</td>
-                  <td className="px-4 py-2.5"><ConfidenceBadge level={s.overallConfidence} /></td>
-                  <td className="px-4 py-2.5"><ShieldBadge status={s.shieldStatus} /></td>
-                  <td className="px-4 py-2.5"><StatusBadge status={s.status} /></td>
-                  <td className="px-4 py-2.5 text-center" style={{ color: "#3D5166" }}>{s.documentCount}</td>
-                  <td className="px-4 py-2.5" style={{ color: "#6B7E92" }}>{relativeTime(s.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "#DDE3EA" }}>
-            <span className="text-[12px]" style={{ color: "#6B7E92" }}>Page {page} of {totalPages}</span>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="px-3 py-1.5 text-[12px] rounded border disabled:opacity-50" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>Previous</button>
-              <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="px-3 py-1.5 text-[12px] rounded border disabled:opacity-50" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>Next</button>
-            </div>
-          </div>
-        )}
+function QuarantineQueue({
+  shipments,
+  selectedId,
+  onSelect,
+}: {
+  shipments: ShipmentSummary[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div
+      className="flex flex-col h-full shrink-0"
+      style={{ width: 280, backgroundColor: COLORS.surface, borderRight: `1px solid ${COLORS.borderLight}` }}
+    >
+      <div
+        className="px-4 py-3 border-b shrink-0 flex items-center justify-between"
+        style={{ borderColor: COLORS.borderSubtle }}
+      >
+        <span className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>
+          Quarantine Queue
+        </span>
+        <span
+          className="text-[11px] font-bold px-1.5 py-0.5 rounded"
+          style={{ backgroundColor: COLORS.orangeSubtle, color: COLORS.orange }}
+        >
+          {shipments.length}
+        </span>
+      </div>
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: `${COLORS.borderLight} transparent` }}
+      >
+        {shipments.map((s) => {
+          const isActive = selectedId === s.id;
+          const src = getSourceIcon(s.source);
+          const SrcIcon = src.icon;
+          return (
+            <button
+              key={s.id}
+              onClick={() => onSelect(s.id)}
+              className="w-full text-left px-4 py-3 border-b transition-colors"
+              style={{
+                borderColor: COLORS.borderSubtle,
+                backgroundColor: isActive ? COLORS.orangeSubtle : 'transparent',
+                borderLeft: isActive ? `3px solid ${COLORS.orange}` : '3px solid transparent',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) e.currentTarget.style.backgroundColor = COLORS.canvas;
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-mono text-[12px] font-semibold" style={{ color: COLORS.orange }}>
+                  {s.reference}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <SrcIcon size={12} style={{ color: COLORS.textTertiary }} />
+                <span className="text-[11px]" style={{ color: COLORS.textTertiary }}>
+                  {src.label}
+                </span>
+                <span className="text-[11px] ml-auto" style={{ color: COLORS.textTertiary }}>
+                  {relativeTime(s.createdAt)}
+                </span>
+              </div>
+              <ConfidenceBar percent={s.confidencePercent} />
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   Shipment Detail View
-   ══════════════════════════════════════════════ */
+function DocumentViewer({ shipment }: { shipment: ShipmentDetail | null }) {
+  const [activeTab, setActiveTab] = useState<'invoice' | 'packing' | 'bl'>('invoice');
 
-function ShipmentDetailView({ shipmentId, setView }: { shipmentId: string; setView: (v: ViewMode) => void }) {
-  const { data: s, loading, refetch } = useApi<ShipmentDetail | null>(`/api/shipments/${shipmentId}`, null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [actionResult, setActionResult] = useState<string | null>(null);
-  const [rejectOpen, setRejectOpen] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const { data: cwExecutions } = useApi<{ executions: CwExecution[] }>(`/api/cargowise/executions?shipmentId=${shipmentId}&limit=5`, { executions: [] });
-
-  const handleAction = async (action: string, url: string, body?: Record<string, unknown>) => {
-    setActionLoading(action);
-    setActionResult(null);
-    try {
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
-      const data = await res.json();
-      if (res.ok) {
-        setActionResult(`✓ ${action} succeeded`);
-        refetch();
-      } else {
-        setActionResult(`✗ ${action} failed: ${data.error || data.message || "Unknown error"}`);
-      }
-    } catch (e) {
-      setActionResult(`✗ ${action} error: ${e instanceof Error ? e.message : "Network error"}`);
-    }
-    setActionLoading(null);
-  };
-
-  const handleFieldEdit = async (field: string, value: string) => {
-    try {
-      await fetch(`/api/shipments/${shipmentId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value }),
-      });
-      refetch();
-    } catch { /* silently fail */ }
-    setEditingField(null);
-  };
-
-  if (loading || !s) {
-    return <div className="p-6"><div className="text-[13px]" style={{ color: "#6B7E92" }}>Loading shipment details...</div></div>;
+  if (!shipment) {
+    return (
+      <div
+        className="flex-1 flex items-center justify-center"
+        style={{ backgroundColor: COLORS.navy }}
+      >
+        <div className="text-center">
+          <FileText size={40} style={{ color: COLORS.textSecondaryDark }} className="mx-auto mb-3" />
+          <p className="text-[13px]" style={{ color: COLORS.textSecondaryDark }}>
+            Select a shipment to view documents
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  const shieldModules = s.shieldResults && typeof s.shieldResults === "object" && "modules" in s.shieldResults
-    ? (s.shieldResults as { modules: Array<{ module: string; result: string; detail: Record<string, unknown>; penalty_risk: boolean }> }).modules
-    : s.complianceEvents.map((ce) => ({
-        module: ce.module,
-        result: ce.result,
-        detail: (() => { try { return JSON.parse(ce.detail); } catch { return { message: ce.detail }; } })(),
-        penalty_risk: ce.penaltyRisk,
-      }));
+  return (
+    <div className="flex-1 flex flex-col" style={{ backgroundColor: COLORS.navy }}>
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-4 py-2.5 shrink-0"
+        style={{ borderBottom: `1px solid ${COLORS.navyBorder}` }}
+      >
+        <span className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textSecondaryDark }}>
+          Document Viewer
+        </span>
+        <div className="flex gap-1">
+          {(['invoice', 'packing', 'bl'] as const).map((tab) => {
+            const labels = { invoice: 'Invoice', packing: 'Packing List', bl: 'BL/AWB' };
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
+                style={{
+                  backgroundColor: activeTab === tab ? COLORS.orange : 'transparent',
+                  color: activeTab === tab ? '#FFF' : COLORS.textSecondaryDark,
+                }}
+              >
+                {labels[tab]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-  const detailFields = [
-    { label: "Shipper", value: s.shipperName, field: "shipperName" },
-    { label: "Consignee", value: s.consigneeName, field: "consigneeName" },
-    { label: "Route", value: `${s.originPort || "—"} → ${s.destinationPort || "—"}`, field: null },
-    { label: "BL/AWB", value: s.awbOrBlNumber, field: "awbOrBlNumber" },
-    { label: "Type", value: (s.shipmentType || "").replace(/_/g, " "), field: "shipmentType" },
-    { label: "Incoterms", value: s.incoterms, field: "incoterms" },
-    { label: "Vessel/Flight", value: s.vesselOrFlight, field: "vesselOrFlight" },
-    { label: "ETA", value: s.eta ? new Date(s.eta).toLocaleDateString() : "—", field: null },
-    { label: "Invoice Value", value: s.invoiceValue ? `$${Number(s.invoiceValue).toLocaleString()}` : "—", field: "invoiceValue" },
-    { label: "Gross Weight", value: s.grossWeight ? `${Number(s.grossWeight).toLocaleString()} ${s.weightUnit || "KGS"}` : "—", field: "grossWeight" },
-    { label: "Packages", value: s.numberOfPackages, field: "numberOfPackages" },
-    { label: "Confidence", value: s.overallConfidence, field: null },
-    { label: "Source", value: s.source, field: null },
-    { label: "HS Code", value: s.hsCodePrimary, field: "hsCodePrimary" },
+      {/* Mock Document Area */}
+      <div className="flex-1 p-4 overflow-auto" style={{ scrollbarWidth: 'thin' }}>
+        <div
+          className="mx-auto rounded-lg p-6 max-w-lg"
+          style={{ backgroundColor: '#0F2433', border: `1px solid ${COLORS.navyBorder}` }}
+        >
+          {/* SAD 500 Form Representation */}
+          <div className="text-center mb-6">
+            <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: COLORS.orange }}>
+              South African Revenue Service
+            </div>
+            <div className="text-[16px] font-bold" style={{ color: COLORS.textPrimaryDark }}>
+              SAD 500 — Customs Declaration
+            </div>
+            <div className="text-[11px] mt-1" style={{ color: COLORS.textSecondaryDark }}>
+              Reference: {shipment.reference}
+            </div>
+          </div>
+
+          {/* Form Grid */}
+          <div className="grid grid-cols-2 gap-3 text-[11px]">
+            {[
+              { label: 'Decl Type', value: 'IM' },
+              { label: 'Office', value: shipment.destinationPort || 'ZADUR' },
+              { label: 'Declarant', value: shipment.consigneeName || '—' },
+              { label: 'Importer', value: shipment.consigneeName || '—' },
+              { label: 'Export Country', value: shipment.originPort?.substring(0, 2) || 'CN' },
+              { label: 'Transport', value: shipment.vesselOrFlight || '—' },
+              { label: 'Gross Mass', value: shipment.grossWeight ? `${shipment.grossWeight} ${shipment.weightUnit}` : '—' },
+              { label: 'Packages', value: shipment.numberOfPackages ? String(shipment.numberOfPackages) : '—' },
+              { label: 'HS Code', value: shipment.hsCodePrimary || '—' },
+              { label: 'Currency', value: shipment.currency || 'USD' },
+              { label: 'Customs Value', value: shipment.invoiceValue ? `$${shipment.invoiceValue.toLocaleString()}` : '—' },
+              { label: 'Incoterms', value: shipment.incoterms || '—' },
+            ].map((field) => (
+              <div
+                key={field.label}
+                className="p-2 rounded"
+                style={{ backgroundColor: '#0A1A26', border: `1px solid ${COLORS.navyBorder}` }}
+              >
+                <div style={{ color: COLORS.textSecondaryDark }} className="mb-0.5 text-[9px] uppercase tracking-wider">
+                  {field.label}
+                </div>
+                <div style={{ color: COLORS.textPrimaryDark }} className="font-mono font-medium">
+                  {field.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Line Items Preview */}
+          <div className="mt-4">
+            <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: COLORS.textSecondaryDark }}>
+              Cargo Line Items
+            </div>
+            {shipment.lineItems.slice(0, 3).map((li) => (
+              <div
+                key={li.id}
+                className="flex items-center justify-between py-1.5 border-b text-[11px]"
+                style={{ borderColor: COLORS.navyBorder }}
+              >
+                <span style={{ color: COLORS.textPrimaryDark }} className="font-mono">
+                  {li.hsCode || '—'}
+                </span>
+                <span style={{ color: COLORS.textSecondaryDark }} className="truncate mx-2 flex-1">
+                  {li.description}
+                </span>
+                <span style={{ color: COLORS.orange }} className="font-mono">
+                  {li.totalValue ? `$${li.totalValue.toLocaleString()}` : '—'}
+                </span>
+              </div>
+            ))}
+            {shipment.lineItems.length > 3 && (
+              <div className="text-[10px] mt-1" style={{ color: COLORS.textSecondaryDark }}>
+                +{shipment.lineItems.length - 3} more items
+              </div>
+            )}
+          </div>
+
+          {/* Watermark */}
+          <div className="mt-6 text-center">
+            <span
+              className="text-[9px] uppercase tracking-widest"
+              style={{ color: COLORS.navyBorder }}
+            >
+              AI-EXTRACTED DRAFT — FOR REVIEW ONLY
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AIEditableFormField({
+  label,
+  value,
+  fieldKey,
+  confidence,
+  isEditing,
+  onEditStart,
+  onEditSave,
+  onEditCancel,
+  editValue,
+  onEditValueChange,
+  mono = false,
+}: {
+  label: string;
+  value: string | number | null;
+  fieldKey: string;
+  confidence: Confidence;
+  isEditing: boolean;
+  onEditStart: (field: string) => void;
+  onEditSave: () => void;
+  onEditCancel: () => void;
+  editValue: string;
+  onEditValueChange: (v: string) => void;
+  mono?: boolean;
+}) {
+  const borderColor =
+    confidence === 'high'
+      ? COLORS.success
+      : confidence === 'medium'
+        ? '#F59E0B'
+        : COLORS.orange;
+
+  const showWarning = confidence === 'low';
+  const displayValue = value != null ? String(value) : '—';
+
+  return (
+    <div className="mb-3">
+      <div className="flex items-center gap-1.5 mb-1">
+        <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>
+          {label}
+        </label>
+        {confidence === 'medium' && (
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#F59E0B' }} />
+        )}
+        {showWarning && <AlertCircle size={12} style={{ color: COLORS.orange }} />}
+      </div>
+      {isEditing ? (
+        <div className="flex gap-1.5">
+          <input
+            value={editValue}
+            onChange={(e) => onEditValueChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onEditSave();
+              if (e.key === 'Escape') onEditCancel();
+            }}
+            autoFocus
+            className="flex-1 px-2 py-1.5 text-[13px] rounded border outline-none"
+            style={{
+              borderColor: COLORS.orange,
+              backgroundColor: COLORS.orangeSubtle,
+              color: COLORS.textPrimaryLight,
+              fontFamily: mono ? 'var(--font-geist-mono), monospace' : 'inherit',
+            }}
+          />
+          <button
+            onClick={onEditSave}
+            className="p-1.5 rounded"
+            style={{ backgroundColor: COLORS.success, color: '#FFF' }}
+          >
+            <Check size={14} />
+          </button>
+          <button
+            onClick={onEditCancel}
+            className="p-1.5 rounded"
+            style={{ backgroundColor: COLORS.surfaceSubtle, color: COLORS.textTertiary }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      ) : (
+        <div
+          className="px-2.5 py-1.5 text-[13px] rounded cursor-pointer transition-colors"
+          style={{
+            borderBottom: `2px solid ${borderColor}`,
+            backgroundColor: showWarning ? COLORS.orangeSubtle : 'transparent',
+            color: COLORS.textPrimaryLight,
+            fontFamily: mono ? 'var(--font-geist-mono), monospace' : 'inherit',
+          }}
+          onClick={() => onEditStart(fieldKey)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = showWarning ? COLORS.orangeSubtle : COLORS.canvas;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = showWarning ? COLORS.orangeSubtle : 'transparent';
+          }}
+        >
+          {displayValue}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AIDraftForm({
+  shipment,
+}: {
+  shipment: ShipmentDetail | null;
+}) {
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const [formValues, setFormValues] = useState<Record<string, string | number | null>>(() => {
+    if (!shipment) return {};
+    return {
+      shipperName: shipment.shipperName,
+      consigneeName: shipment.consigneeName,
+      shipperAddress: shipment.shipperAddress,
+      consigneeAddress: shipment.consigneeAddress,
+      grossWeight: shipment.grossWeight,
+      invoiceValue: shipment.invoiceValue,
+      currency: shipment.currency,
+      hsCodePrimary: shipment.hsCodePrimary,
+      incoterms: shipment.incoterms,
+      numberOfPackages: shipment.numberOfPackages,
+      vesselOrFlight: shipment.vesselOrFlight,
+      eta: shipment.eta,
+      etd: shipment.etd,
+    };
+  });
+
+  const handleEditStart = useCallback((field: string) => {
+    if (shipment) {
+      const currentVal = formValues[field];
+      setEditValue(currentVal != null ? String(currentVal) : '');
+      setEditingField(field);
+    }
+  }, [shipment, formValues]);
+
+  const handleEditSave = useCallback(() => {
+    if (editingField) {
+      setFormValues((prev) => ({ ...prev, [editingField]: editValue }));
+    }
+    setEditingField(null);
+  }, [editingField, editValue]);
+
+  const handleEditCancel = useCallback(() => {
+    setEditingField(null);
+  }, []);
+
+  if (!shipment) {
+    return (
+      <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: COLORS.surface }}>
+        <div className="text-center">
+          <Edit3 size={40} style={{ color: COLORS.textTertiary }} className="mx-auto mb-3" />
+          <p className="text-[13px]" style={{ color: COLORS.textTertiary }}>
+            Select a shipment to edit AI draft
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const fc = shipment.fieldConfidence;
+
+  const fields = [
+    { label: 'Shipper', key: 'shipperName', confidence: fc.shipperName || 'high', mono: false },
+    { label: 'Consignee', key: 'consigneeName', confidence: fc.consigneeName || 'high', mono: false },
+    { label: 'Shipper Address', key: 'shipperAddress', confidence: 'high' as Confidence, mono: false },
+    { label: 'Consignee Address', key: 'consigneeAddress', confidence: 'high' as Confidence, mono: false },
+    { label: 'Gross Weight', key: 'grossWeight', confidence: fc.grossWeight || 'high', mono: true },
+    { label: 'Customs Value', key: 'invoiceValue', confidence: fc.invoiceValue || 'high', mono: true },
+    { label: 'Currency', key: 'currency', confidence: 'high' as Confidence, mono: true },
+    { label: 'HS Code', key: 'hsCodePrimary', confidence: fc.hsCodePrimary || 'high', mono: true },
+    { label: 'Incoterms', key: 'incoterms', confidence: 'high' as Confidence, mono: true },
+    { label: 'Packages', key: 'numberOfPackages', confidence: 'high' as Confidence, mono: true },
+    { label: 'Vessel/Flight', key: 'vesselOrFlight', confidence: 'high' as Confidence, mono: false },
+    { label: 'ETA', key: 'eta', confidence: 'high' as Confidence, mono: true },
+    { label: 'ETD', key: 'etd', confidence: 'high' as Confidence, mono: true },
   ];
 
   return (
-    <div className="p-6 max-w-[1440px]">
+    <div className="flex-1 flex flex-col" style={{ backgroundColor: COLORS.surface }}>
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <button onClick={() => setView("shipments")} className="text-[13px] font-medium hover:underline" style={{ color: "#B8860B" }}>← Back to Queue</button>
-        <span style={{ color: "#C8D0DA" }}>|</span>
-        <span className="font-mono text-[15px] font-semibold" style={{ color: "#0D1B2A" }}>{s.reference}</span>
-        <ShieldBadge status={s.shieldStatus} />
-        <StatusBadge status={s.status} />
+      <div
+        className="flex items-center justify-between px-4 py-2.5 shrink-0"
+        style={{ borderBottom: `1px solid ${COLORS.borderLight}` }}
+      >
+        <span className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>
+          AI Draft — Editable Form
+        </span>
+        <span className="flex items-center gap-1.5 text-[11px]" style={{ color: COLORS.textTertiary }}>
+          <Edit3 size={12} />
+          Click any field to edit
+        </span>
       </div>
 
-      {/* Action result banner */}
-      {actionResult && (
-        <div className={`mb-4 rounded-md p-3 text-[12px] font-medium ${actionResult.startsWith("✓") ? "border" : "border"}`} style={{
-          backgroundColor: actionResult.startsWith("✓") ? "#EBF5EE" : "#FEF2F2",
-          borderColor: actionResult.startsWith("✓") ? "#C6E4CE" : "#F5A5A5",
-          color: actionResult.startsWith("✓") ? "#15632A" : "#9B1C1C",
-        }}>
-          {actionResult}
-          <button onClick={() => setActionResult(null)} className="ml-2 underline">Dismiss</button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: Shipment Info + Line Items */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Shipment Info */}
-          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>SHIPMENT DETAILS</span>
-              <span className="ml-2 text-[11px]" style={{ color: "#6B7E92" }}>Click a value to edit</span>
-            </div>
-            <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-[13px]">
-              {detailFields.map((item) => (
-                <div key={item.label}>
-                  <div className="text-[11px] font-medium uppercase tracking-wider mb-0.5" style={{ color: "#6B7E92" }}>{item.label}</div>
-                  {editingField === item.field ? (
-                    <input
-                      autoFocus
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onBlur={() => item.field && handleFieldEdit(item.field, editValue)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && item.field) handleFieldEdit(item.field, editValue); if (e.key === "Escape") setEditingField(null); }}
-                      className="w-full px-2 py-1 text-[13px] border rounded outline-none focus:border-[#B8860B]"
-                      style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }}
-                    />
-                  ) : (
-                    <div
-                      className={`font-medium ${item.field ? "cursor-pointer hover:bg-[#F1F4F8] rounded px-1 -mx-1" : ""}`}
-                      style={{ color: "#0D1B2A" }}
-                      onClick={() => {
-                        if (item.field) { setEditingField(item.field); setEditValue(String(item.value || "")); }
-                      }}
-                    >
-                      {String(item.value || "—")}
-                      {item.field && <Save size={10} className="inline ml-1 opacity-30" />}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Line Items */}
-          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>LINE ITEMS ({s.lineItems.length})</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr style={{ backgroundColor: "#F1F4F8" }}>
-                    <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>HS Code</th>
-                    <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Description</th>
-                    <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Qty</th>
-                    <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Unit</th>
-                    <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {s.lineItems.length === 0 ? (
-                    <tr><td colSpan={5} className="px-4 py-4 text-center text-[12px]" style={{ color: "#6B7E92" }}>No line items extracted</td></tr>
-                  ) : s.lineItems.map((li) => (
-                    <tr key={li.id} className="border-b" style={{ borderColor: "#DDE3EA" }}>
-                      <td className="px-4 py-2 font-mono text-[12px]" style={{ color: "#1A4971" }}>{li.hsCode || "—"}</td>
-                      <td className="px-4 py-2" style={{ color: "#0D1B2A" }}>{li.description || "—"}</td>
-                      <td className="px-4 py-2 text-right font-mono" style={{ color: "#3D5166" }}>{li.quantity?.toLocaleString() || "—"}</td>
-                      <td className="px-4 py-2" style={{ color: "#3D5166" }}>{li.unit || "—"}</td>
-                      <td className="px-4 py-2 text-right font-mono font-medium" style={{ color: "#0D1B2A" }}>{li.totalValue ? `$${Number(li.totalValue).toLocaleString()}` : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Documents */}
-          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>DOCUMENTS ({s.documents.length})</span>
-            </div>
-            <div className="p-4">
-              {s.documents.length === 0 ? (
-                <div className="text-[12px]" style={{ color: "#6B7E92" }}>No documents attached</div>
-              ) : (
-                <div className="space-y-2">
-                  {s.documents.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-3 p-2 rounded-md border" style={{ borderColor: "#DDE3EA" }}>
-                      {fileIcon(doc.fileType)}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[12px] font-medium truncate" style={{ color: "#0D1B2A" }}>{doc.filename}</div>
-                        <div className="text-[11px]" style={{ color: "#6B7E92" }}>{doc.docType} · {doc.status}</div>
-                      </div>
-                      <span className="text-[11px]" style={{ color: "#6B7E92" }}>{relativeTime(doc.createdAt)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Audit Timeline */}
-          {s.complianceEvents.length > 0 && (
-            <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-              <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-                <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>AUDIT TIMELINE</span>
-              </div>
-              <div className="p-4 max-h-64 overflow-y-auto space-y-3">
-                {s.complianceEvents.map((ev) => (
-                  <div key={ev.id} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 ${ev.result === "pass" ? "bg-emerald-500" : ev.result === "hold" ? "bg-amber-500" : "bg-red-500"}`} />
-                      <div className="w-px flex-1" style={{ backgroundColor: "#DDE3EA" }} />
-                    </div>
-                    <div className="pb-3">
-                      <div className="text-[12px] font-semibold" style={{ color: "#0D1B2A" }}>{ev.module}</div>
-                      <div className="text-[11px]" style={{ color: "#6B7E92" }}>
-                        {(() => { try { const d = JSON.parse(ev.detail); return d.message || d.reason || JSON.stringify(d); } catch { return ev.detail; } })()}
-                      </div>
-                      <div className="text-[10px] mt-0.5" style={{ color: "#9AAAB8" }}>{relativeTime(ev.createdAt)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Shield + Actions */}
-        <div className="space-y-4">
-          {/* Shield */}
-          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
-              <ShieldCheck size={16} style={{ color: "#B8860B" }} />
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>COMPLIANCE SHIELD</span>
-            </div>
-            <div className="p-4 space-y-3">
-              {shieldModules.map((m) => (
-                <div key={m.module} className="rounded-md border p-3" style={{ borderColor: "#DDE3EA" }}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12px] font-semibold" style={{ color: "#0D1B2A" }}>{m.module}</span>
-                    <ShieldBadge status={(m.result as ShieldStatus) || "pending"} />
-                  </div>
-                  <p className="text-[12px]" style={{ color: "#6B7E92" }}>
-                    {typeof m.detail === "object" ? (m.detail as Record<string, unknown>).message || (m.detail as Record<string, unknown>).reason || JSON.stringify(m.detail) : String(m.detail)}
-                  </p>
-                  {m.penalty_risk && (
-                    <div className="mt-1 text-[11px] font-medium text-red-600 flex items-center gap-1">
-                      <AlertTriangle size={11} /> SARS Penalty Risk
-                    </div>
-                  )}
-                </div>
-              ))}
-              {s.shieldStatus === "fail" && (
-                <div className="rounded-md p-3 text-[12px] font-medium" style={{ backgroundColor: "#FEF2F2", border: "1px solid #F5A5A5", color: "#9B1C1C" }}>
-                  <div className="flex items-center gap-1.5 mb-1"><Ban size={13} />CargoWise submission BLOCKED</div>
-                  Resolve all FAIL results before proceeding.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-            <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-              <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>ACTIONS</span>
-            </div>
-            <div className="p-4 space-y-2">
-              <button
-                onClick={() => handleAction("Create CW Draft", `/api/cargowise/execute`, { shipmentId: s.id })}
-                disabled={s.shieldStatus === "fail" || actionLoading !== null}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-semibold text-white transition-colors disabled:opacity-50"
-                style={{ backgroundColor: s.shieldStatus === "fail" ? "#9AAAB8" : "#B8860B" }}
-              >
-                {actionLoading === "Create CW Draft" ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-                Create CW Draft
-              </button>
-              <button
-                onClick={() => handleAction("Approve", `/api/shipments/${s.id}/approve`, { notes: "Approved via CargoIQ", acknowledgeRisks: s.shieldStatus === "hold" })}
-                disabled={s.status === "approved" || actionLoading !== null}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#EBF5EE]" style={{ borderColor: "#C8D0DA", color: "#15632A" }}
-              >
-                {actionLoading === "Approve" ? <Loader2 size={14} className="animate-spin" /> : <ThumbsUp size={14} />}
-                Approve
-              </button>
-              <button
-                onClick={() => setRejectOpen(true)}
-                disabled={s.status === "rejected" || actionLoading !== null}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#FEF2F2]" style={{ borderColor: "#C8D0DA", color: "#9B1C1C" }}
-              >
-                <ThumbsDown size={14} />
-                Reject
-              </button>
-              <button
-                onClick={() => handleAction("Re-run Shield", `/api/shipments/${s.id}/shield`)}
-                disabled={actionLoading !== null}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-[13px] font-medium border transition-colors hover:bg-[#F1F4F8]" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}
-              >
-                {actionLoading === "Re-run Shield" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                Re-run Shield
-              </button>
-            </div>
-          </div>
-
-          {/* CW Execution History */}
-          {cwExecutions.executions.length > 0 && (
-            <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-              <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-                <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CW EXECUTIONS</span>
-              </div>
-              <div className="p-4 space-y-2 max-h-48 overflow-y-auto">
-                {cwExecutions.executions.map((ex) => (
-                  <div key={ex.id} className="flex items-center justify-between text-[12px] p-2 rounded border" style={{ borderColor: "#DDE3EA" }}>
-                    <div>
-                      <span className="font-mono" style={{ color: "#B8860B" }}>{ex.executionType}</span>
-                      <span className="ml-2" style={{ color: "#6B7E92" }}>{ex.durationMs ? `${ex.durationMs}ms` : "—"}</span>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ex.status === "success" ? "bg-emerald-50 text-emerald-700" : ex.status === "failed" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>{ex.status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Reject Dialog */}
-      {rejectOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h3 className="text-[15px] font-semibold mb-4" style={{ color: "#0D1B2A" }}>Reject Shipment</h3>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Enter rejection reason (min 3 characters)..."
-              className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B] mb-4"
-              style={{ borderColor: "#C8D0DA", color: "#0D1B2A", minHeight: 100 }}
-              rows={4}
+      {/* Form Content */}
+      <div
+        className="flex-1 p-4 overflow-y-auto"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: `${COLORS.borderLight} transparent` }}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+          {fields.map((f) => (
+            <AIEditableFormField
+              key={f.key}
+              label={f.label}
+              value={formValues[f.key]}
+              fieldKey={f.key}
+              confidence={f.confidence}
+              isEditing={editingField === f.key}
+              onEditStart={handleEditStart}
+              onEditSave={handleEditSave}
+              onEditCancel={handleEditCancel}
+              editValue={editValue}
+              onEditValueChange={setEditValue}
+              mono={f.mono}
             />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => { setRejectOpen(false); setRejectReason(""); }} className="px-4 py-2 text-[13px] rounded-md border" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>Cancel</button>
-              <button
-                onClick={() => { handleAction("Reject", `/api/shipments/${s.id}/reject`, { reason: rejectReason }); setRejectOpen(false); setRejectReason(""); }}
-                disabled={rejectReason.length < 3}
-                className="px-4 py-2 text-[13px] rounded-md text-white disabled:opacity-50" style={{ backgroundColor: "#9B1C1C" }}
-              >Reject Shipment</button>
-            </div>
+          ))}
+        </div>
+
+        {/* Line Items */}
+        <div className="mt-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: COLORS.textTertiary }}>
+            Cargo Line Items
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   Compliance Audit View
-   ══════════════════════════════════════════════ */
-
-function ComplianceView() {
-  const [moduleFilter, setModuleFilter] = useState("all");
-  const [resultFilter, setResultFilter] = useState("all");
-  const { data: shipmentsData, loading } = useApi<ShipmentListResponse>("/api/shipments?limit=50", { items: [], total: 0, page: 1, limit: 50 });
-  const { data: analytics } = useApi<AnalyticsData>("/api/analytics", {
-    processed: 0, automationRate: 0, avgTimeSeconds: 0, errorRate: 0,
-    shieldSummary: { pass: 0, hold: 0, fail: 0, pending: 0 },
-    queueSize: 0, exceptions: 0, recentTrend: [], topOriginPorts: [],
-    avgConfidenceBySource: {}, shieldPassRate: 0,
-    pipelineStatus: { pending: 0, review_required: 0, approved: 0, rejected: 0, cw_draft_created: 0, in_cargowise: 0, error: 0 },
-  });
-
-  // Aggregate compliance events from all shipments
-  const [allEvents, setAllEvents] = useState<Array<ComplianceEvent & { reference: string; shipmentId: string }>>([]);
-
-  useEffect(() => {
-    if (shipmentsData.items.length === 0) return;
-    const fetchEvents = async () => {
-      const events: Array<ComplianceEvent & { reference: string; shipmentId: string }> = [];
-      // Fetch detail for each shipment to get complianceEvents
-      const promises = shipmentsData.items.map(async (s) => {
-        try {
-          const res = await fetch(`/api/shipments/${s.id}`);
-          if (res.ok) {
-            const detail = await res.json();
-            if (detail.complianceEvents) {
-              for (const ce of detail.complianceEvents) {
-                events.push({ ...ce, reference: s.reference, shipmentId: s.id });
-              }
-            }
-          }
-        } catch { /* skip */ }
-      });
-      await Promise.all(promises);
-      setAllEvents(events);
-    };
-    fetchEvents();
-  }, [shipmentsData.items]);
-
-  const filtered = allEvents.filter((e) => {
-    if (moduleFilter !== "all" && e.module !== moduleFilter) return false;
-    if (resultFilter !== "all" && e.result !== resultFilter) return false;
-    return true;
-  });
-
-  const uniqueModules = [...new Set(allEvents.map((e) => e.module))];
-  const passCount = allEvents.filter((e) => e.result === "pass").length;
-  const holdCount = allEvents.filter((e) => e.result === "hold").length;
-  const failCount = allEvents.filter((e) => e.result === "fail").length;
-
-  return (
-    <div className="p-6 max-w-[1440px]">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>{allEvents.length}</div>
-          <div className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "#6B7E92" }}>Total Checks</div>
-        </div>
-        <div className="rounded-lg border p-4" style={{ backgroundColor: "#EBF5EE", borderColor: "#C6E4CE" }}>
-          <div className="text-2xl font-bold text-emerald-700">{passCount}</div>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-emerald-600">Pass</div>
-        </div>
-        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FEF6E7", borderColor: "#E8B84B" }}>
-          <div className="text-2xl font-bold text-amber-700">{holdCount}</div>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-amber-600">Hold</div>
-        </div>
-        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FEF2F2", borderColor: "#F5A5A5" }}>
-          <div className="text-2xl font-bold text-red-700">{failCount}</div>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-red-600">Fail</div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} className="px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
-          <option value="all">All Modules</option>
-          {uniqueModules.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select value={resultFilter} onChange={(e) => setResultFilter(e.target.value)} className="px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
-          <option value="all">All Results</option>
-          <option value="pass">Pass</option>
-          <option value="hold">Hold</option>
-          <option value="fail">Fail</option>
-        </select>
-        <div className="ml-auto text-[12px]" style={{ color: "#6B7E92" }}>{filtered.length} event{filtered.length !== 1 ? "s" : ""}</div>
-      </div>
-
-      {/* Events Table */}
-      <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr style={{ backgroundColor: "#F1F4F8" }}>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Shipment</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Module</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Result</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Detail</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Penalty Risk</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>Loading compliance events...</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>No compliance events found.</td></tr>
-              ) : filtered.map((ev) => (
-                <tr key={ev.id} className="border-b hover:bg-[#F1F4F8] transition-colors" style={{ borderColor: "#DDE3EA" }}>
-                  <td className="px-4 py-2.5 font-mono text-[12px] font-medium" style={{ color: "#B8860B" }}>{ev.reference}</td>
-                  <td className="px-4 py-2.5" style={{ color: "#0D1B2A" }}>{ev.module}</td>
-                  <td className="px-4 py-2.5"><ShieldBadge status={ev.result as ShieldStatus} /></td>
-                  <td className="px-4 py-2.5 max-w-[300px] truncate" style={{ color: "#3D5166" }}>
-                    {(() => { try { const d = JSON.parse(ev.detail); return d.message || d.reason || JSON.stringify(d); } catch { return ev.detail; } })()}
-                  </td>
-                  <td className="px-4 py-2.5">{ev.penaltyRisk ? <AlertTriangle size={14} className="text-red-500" /> : <span style={{ color: "#6B7E92" }}>—</span>}</td>
-                  <td className="px-4 py-2.5" style={{ color: "#6B7E92" }}>{relativeTime(ev.createdAt)}</td>
+          <div className="rounded-lg border overflow-hidden" style={{ borderColor: COLORS.borderLight }}>
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr style={{ backgroundColor: COLORS.canvas }}>
+                  <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase" style={{ color: COLORS.textTertiary }}>#</th>
+                  <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase" style={{ color: COLORS.textTertiary }}>HS Code</th>
+                  <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase" style={{ color: COLORS.textTertiary }}>Description</th>
+                  <th className="text-right px-3 py-2 font-semibold text-[10px] uppercase" style={{ color: COLORS.textTertiary }}>Qty</th>
+                  <th className="text-right px-3 py-2 font-semibold text-[10px] uppercase" style={{ color: COLORS.textTertiary }}>Value</th>
+                  <th className="text-center px-3 py-2 font-semibold text-[10px] uppercase" style={{ color: COLORS.textTertiary }}>Conf</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Shield Pass Rate */}
-      {analytics.shieldPassRate > 0 && (
-        <div className="mt-6 rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="text-[13px] font-semibold mb-2" style={{ color: "#3D5166" }}>SHIELD PASS RATE</div>
-          <div className="w-full h-3 rounded-full" style={{ backgroundColor: "#E8ECF1" }}>
-            <div className="h-3 rounded-full bg-emerald-500" style={{ width: `${Math.round(analytics.shieldPassRate * 100)}%` }} />
-          </div>
-          <div className="text-[12px] mt-1" style={{ color: "#6B7E92" }}>{Math.round(analytics.shieldPassRate * 100)}% of checked shipments pass all shield modules</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   WiseLayer View
-   ══════════════════════════════════════════════ */
-
-function WiseLayerView() {
-  const { data: analytics } = useApi<AnalyticsData>("/api/analytics", {
-    processed: 0, automationRate: 0, avgTimeSeconds: 0, errorRate: 0,
-    shieldSummary: { pass: 0, hold: 0, fail: 0, pending: 0 },
-    queueSize: 0, exceptions: 0, recentTrend: [], topOriginPorts: [],
-    avgConfidenceBySource: {}, shieldPassRate: 0,
-    pipelineStatus: { pending: 0, review_required: 0, approved: 0, rejected: 0, cw_draft_created: 0, in_cargowise: 0, error: 0 },
-  });
-
-  const { data: shipments } = useApi<ShipmentListResponse>("/api/shipments?limit=20", { items: [], total: 0, page: 1, limit: 20 });
-
-  const totalValue = shipments.items.reduce((acc, s) => acc + 0, 0); // Placeholder
-  const avgConf = analytics.avgConfidenceBySource;
-
-  return (
-    <div className="p-6 max-w-[1440px]">
-      {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="flex items-center gap-2 mb-2"><DollarSign size={16} style={{ color: "#B8860B" }} /><span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "#6B7E92" }}>Total Pipeline Value</span></div>
-          <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>—</div>
-          <div className="text-[11px]" style={{ color: "#6B7E92" }}>Cost intelligence coming soon</div>
-        </div>
-        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="flex items-center gap-2 mb-2"><Activity size={16} style={{ color: "#B8860B" }} /><span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "#6B7E92" }}>Active Shipments</span></div>
-          <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>{shipments.total}</div>
-          <div className="text-[11px]" style={{ color: "#6B7E92" }}>In processing pipeline</div>
-        </div>
-        <div className="rounded-lg border p-4" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="flex items-center gap-2 mb-2"><ShieldCheck size={16} style={{ color: "#B8860B" }} /><span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "#6B7E92" }}>Shield Pass Rate</span></div>
-          <div className="text-2xl font-bold" style={{ color: "#0D1B2A" }}>{Math.round(analytics.shieldPassRate * 100)}%</div>
-          <div className="text-[11px]" style={{ color: "#6B7E92" }}>Compliance health</div>
-        </div>
-      </div>
-
-      {/* Confidence by Source */}
-      <div className="rounded-lg border mb-6" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>EXTRACTION CONFIDENCE BY SOURCE</span>
-        </div>
-        <div className="p-4">
-          {Object.keys(avgConf).length === 0 ? (
-            <div className="text-[12px]" style={{ color: "#6B7E92" }}>No source data available yet</div>
-          ) : (
-            <div className="space-y-4">
-              {Object.entries(avgConf).map(([source, data]) => (
-                <div key={source}>
-                  <div className="text-[12px] font-semibold mb-2 capitalize" style={{ color: "#0D1B2A" }}>{source.replace(/_/g, " ")} ({(data as Record<string, number>).total} shipments)</div>
-                  <div className="flex gap-3">
-                    {(["highPct", "mediumPct", "lowPct"] as const).map((key) => {
-                      const labels = { highPct: "High", mediumPct: "Medium", lowPct: "Low" };
-                      const colors = { highPct: "bg-emerald-500", mediumPct: "bg-amber-500", lowPct: "bg-red-500" };
-                      return (
-                        <div key={key} className="flex-1">
-                          <div className="flex justify-between text-[11px] mb-1">
-                            <span style={{ color: "#6B7E92" }}>{labels[key]}</span>
-                            <span className="font-medium" style={{ color: "#0D1B2A" }}>{(data as Record<string, number>)[key]}%</span>
-                          </div>
-                          <div className="w-full h-2 rounded-full" style={{ backgroundColor: "#E8ECF1" }}>
-                            <div className={`h-2 rounded-full ${colors[key]}`} style={{ width: `${(data as Record<string, number>)[key]}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Top Origin Ports */}
-      <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>TOP ORIGIN PORTS</span>
-        </div>
-        <div className="p-4">
-          {analytics.topOriginPorts.length === 0 ? (
-            <div className="text-[12px]" style={{ color: "#6B7E92" }}>No port data available yet</div>
-          ) : (
-            <div className="space-y-3">
-              {analytics.topOriginPorts.map((p) => {
-                const maxCount = analytics.topOriginPorts[0]?.count || 1;
-                return (
-                  <div key={p.port}>
-                    <div className="flex justify-between text-[12px] mb-1">
-                      <span className="font-mono font-medium" style={{ color: "#0D1B2A" }}>{p.port}</span>
-                      <span style={{ color: "#6B7E92" }}>{p.count} shipments</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full" style={{ backgroundColor: "#E8ECF1" }}>
-                      <div className="h-2 rounded-full" style={{ width: `${(p.count / maxCount) * 100}%`, backgroundColor: "#B8860B" }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Placeholder */}
-      <div className="mt-6 rounded-lg border p-6 text-center" style={{ backgroundColor: "#F1F4F8", borderColor: "#C8D0DA" }}>
-        <DollarSign size={32} className="mx-auto mb-2" style={{ color: "#B8860B" }} />
-        <div className="text-[15px] font-semibold mb-1" style={{ color: "#0D1B2A" }}>WiseTech Cost Intelligence</div>
-        <div className="text-[12px]" style={{ color: "#6B7E92" }}>CargoWise cost optimization insights and WiseTech Value Pack analytics are coming soon. Connect your CargoWise instance in Settings to enable cost tracking.</div>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   CargoWise Integration View
-   ══════════════════════════════════════════════ */
-
-function CargoWiseView({ wsConnected }: { wsConnected: boolean }) {
-  const [testResult, setTestResult] = useState<{ connected: boolean; message?: string; error?: string } | null>(null);
-  const [testLoading, setTestLoading] = useState(false);
-  const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
-  const [draftLoading, setDraftLoading] = useState(false);
-  const [draftResult, setDraftResult] = useState<string | null>(null);
-
-  const { data: executions, loading: executionsLoading, refetch: refetchExecutions } = useApi<{ executions: CwExecution[]; total: number }>("/api/cargowise/executions?limit=20", { executions: [], total: 0 });
-  const { data: shipments } = useApi<ShipmentListResponse>("/api/shipments?limit=10&status=approved", { items: [], total: 0, page: 1, limit: 10 });
-
-  const handleTest = async () => {
-    setTestLoading(true);
-    try {
-      // Get first org
-      const res = await fetch("/api/cargowise/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgId: "auto" }),
-      });
-      const data = await res.json();
-      setTestResult(data);
-    } catch (e) {
-      setTestResult({ connected: false, error: e instanceof Error ? e.message : "Connection failed" });
-    }
-    setTestLoading(false);
-  };
-
-  const handleCreateDraft = async () => {
-    if (!selectedShipmentId) return;
-    setDraftLoading(true);
-    setDraftResult(null);
-    try {
-      const res = await fetch("/api/cargowise/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shipmentId: selectedShipmentId }),
-      });
-      const data = await res.json();
-      setDraftResult(data.success ? `✓ Draft created successfully (${data.execution?.executionType}, ${data.execution?.durationMs}ms)` : `✗ Failed: ${data.error || data.message}`);
-      refetchExecutions();
-    } catch (e) {
-      setDraftResult(`✗ Error: ${e instanceof Error ? e.message : "Network error"}`);
-    }
-    setDraftLoading(false);
-  };
-
-  return (
-    <div className="p-6 max-w-[1440px]">
-      {/* Connection Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CARGOWISE CONNECTION</span>
-          </div>
-          <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {testResult?.connected ? <Wifi size={18} className="text-emerald-500" /> : <WifiOff size={18} className="text-slate-400" />}
-                <span className="text-[13px] font-medium" style={{ color: "#0D1B2A" }}>
-                  {testResult?.connected ? "Connected" : testResult ? "Not Connected" : "Not Tested"}
-                </span>
-              </div>
-              <button onClick={handleTest} disabled={testLoading} className="px-4 py-1.5 rounded-md text-[12px] font-semibold text-white disabled:opacity-50" style={{ backgroundColor: "#B8860B" }}>
-                {testLoading ? <Loader2 size={12} className="animate-spin inline mr-1" /> : null}Test Connection
-              </button>
-            </div>
-            {testResult && (
-              <div className={`rounded-md p-3 text-[12px] ${testResult.connected ? "border" : "border"}`} style={{
-                backgroundColor: testResult.connected ? "#EBF5EE" : "#FEF2F2",
-                borderColor: testResult.connected ? "#C6E4CE" : "#F5A5A5",
-                color: testResult.connected ? "#15632A" : "#9B1C1C",
-              }}>
-                {testResult.connected ? (testResult.message || "Connected") : (testResult.error || testResult.hint || "Connection failed")}
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-[12px]" style={{ color: "#6B7E92" }}>
-              <Radio size={12} className={wsConnected ? "text-emerald-500" : "text-red-500"} />
-              WebSocket: {wsConnected ? "Connected" : "Disconnected"}
-            </div>
-          </div>
-        </div>
-
-        {/* Create Draft */}
-        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CREATE CW DRAFT</span>
-          </div>
-          <div className="p-4 space-y-4">
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Select Approved Shipment</label>
-              <select
-                value={selectedShipmentId || ""}
-                onChange={(e) => setSelectedShipmentId(e.target.value || null)}
-                className="w-full px-3 py-2 text-[13px] rounded-md border outline-none"
-                style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}
-              >
-                <option value="">— Select shipment —</option>
-                {shipments.items.map((s) => (
-                  <option key={s.id} value={s.id}>{s.reference} — {s.shipperName || "Unknown"}</option>
+              </thead>
+              <tbody>
+                {shipment.lineItems.map((li) => (
+                  <tr key={li.id} className="border-t" style={{ borderColor: COLORS.borderSubtle }}>
+                    <td className="px-3 py-1.5 font-mono" style={{ color: COLORS.textTertiary }}>{li.lineNumber}</td>
+                    <td className="px-3 py-1.5 font-mono" style={{ color: COLORS.textPrimaryLight }}>{li.hsCode || '—'}</td>
+                    <td className="px-3 py-1.5 truncate max-w-[160px]" style={{ color: COLORS.textSecondaryLight }}>{li.description}</td>
+                    <td className="px-3 py-1.5 text-right font-mono" style={{ color: COLORS.textPrimaryLight }}>{li.quantity}</td>
+                    <td className="px-3 py-1.5 text-right font-mono" style={{ color: COLORS.orange }}>
+                      {li.totalValue ? `$${li.totalValue.toLocaleString()}` : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-center">
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ backgroundColor: confidenceColor(li.confidence === 'high' ? 90 : li.confidence === 'medium' ? 75 : 55) }}
+                      />
+                    </td>
+                  </tr>
                 ))}
-              </select>
-            </div>
-            <button onClick={handleCreateDraft} disabled={!selectedShipmentId || draftLoading} className="w-full py-2 rounded-md text-[13px] font-semibold text-white disabled:opacity-50" style={{ backgroundColor: "#B8860B" }}>
-              {draftLoading ? <Loader2 size={14} className="animate-spin inline mr-1" /> : <ExternalLink size={14} className="inline mr-1" />}
-              Create Draft
-            </button>
-            {draftResult && (
-              <div className={`rounded-md p-3 text-[12px] ${draftResult.startsWith("✓") ? "border" : "border"}`} style={{
-                backgroundColor: draftResult.startsWith("✓") ? "#EBF5EE" : "#FEF2F2",
-                borderColor: draftResult.startsWith("✓") ? "#C6E4CE" : "#F5A5A5",
-                color: draftResult.startsWith("✓") ? "#15632A" : "#9B1C1C",
-              }}>{draftResult}</div>
-            )}
+              </tbody>
+            </table>
           </div>
-        </div>
-      </div>
-
-      {/* Execution History */}
-      <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "#DDE3EA" }}>
-          <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>EXECUTION HISTORY</span>
-          <button onClick={() => refetchExecutions()} className="text-[12px] font-medium hover:underline" style={{ color: "#B8860B" }}>Refresh</button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr style={{ backgroundColor: "#F1F4F8" }}>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Reference</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Type</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Status</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Duration</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Error</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#6B7E92" }}>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {executionsLoading ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>Loading...</td></tr>
-              ) : executions.executions.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-[12px]" style={{ color: "#6B7E92" }}>No CW executions yet.</td></tr>
-              ) : executions.executions.map((ex) => (
-                <tr key={ex.id} className="border-b" style={{ borderColor: "#DDE3EA" }}>
-                  <td className="px-4 py-2.5 font-mono text-[12px]" style={{ color: "#B8860B" }}>{ex.shipment?.reference || ex.shipmentId}</td>
-                  <td className="px-4 py-2.5" style={{ color: "#3D5166" }}>{ex.executionType}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ex.status === "success" ? "bg-emerald-50 text-emerald-700" : ex.status === "failed" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>{ex.status}</span>
-                  </td>
-                  <td className="px-4 py-2.5 font-mono" style={{ color: "#3D5166" }}>{ex.durationMs ? `${ex.durationMs}ms` : "—"}</td>
-                  <td className="px-4 py-2.5 max-w-[200px] truncate text-red-600 text-[12px]">{ex.errorMessage || "—"}</td>
-                  <td className="px-4 py-2.5" style={{ color: "#6B7E92" }}>{relativeTime(ex.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   Settings View
-   ══════════════════════════════════════════════ */
+function SARSPenaltyShieldBanner({ shipment }: { shipment: ShipmentDetail | null }) {
+  if (!shipment || !shipment.shieldResults) return null;
 
-function SettingsView() {
-  const [cwServerUrl, setCwServerUrl] = useState("");
-  const [cwEnterpriseId, setCwEnterpriseId] = useState("");
-  const [cwServerId, setCwServerId] = useState("");
-  const [cwCredentials, setCwCredentials] = useState("");
-  const [saveResult, setSaveResult] = useState<string | null>(null);
-  const [orgName, setOrgName] = useState("");
+  const warnings: string[] = [];
+  shipment.shieldResults.modules.forEach((m) => {
+    if (m.result === 'hold' || m.result === 'fail') {
+      if (m.module === 'invoice_pl') warnings.push('Invoice & PL Mismatch');
+      if (m.module === 'hs_code') warnings.push('HS Code Missing/Invalid');
+      if (m.module === 'vat_engine') warnings.push('VAT Calculation Required');
+    }
+  });
 
-  // Try to load org settings
-  useEffect(() => {
-    fetch("/api/analytics").then(r => r.json()).then(() => {
-      // We don't have a direct org API, so we'll show placeholder values
-      setOrgName("CargoIQ Demo Organisation");
-    }).catch(() => {});
+  if (warnings.length === 0 && shipment.shieldResults.overall === 'pass') {
+    return (
+      <div
+        className="flex items-center gap-3 px-4 py-2.5 shrink-0"
+        style={{ backgroundColor: '#ECFDF5', borderTop: `1px solid ${COLORS.success}` }}
+      >
+        <CheckCircle2 size={16} style={{ color: COLORS.success }} />
+        <span className="text-[12px] font-semibold" style={{ color: COLORS.successDark }}>
+          SARS Penalty Shield — All checks passed
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-2.5 shrink-0 overflow-x-auto"
+      style={{ backgroundColor: COLORS.orange, scrollbarWidth: 'thin' }}
+    >
+      <Shield size={16} style={{ color: '#FFF' }} />
+      <span className="text-[12px] font-bold text-white whitespace-nowrap">SARS Penalty Shield:</span>
+      {warnings.map((w, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap"
+          style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#FFF' }}
+        >
+          <AlertTriangle size={11} />
+          {w}
+        </span>
+      ))}
+      {shipment.shieldResults.penaltyRiskDetected && (
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap"
+          style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: '#FFF' }}
+        >
+          <XCircle size={11} />
+          Penalty Risk Detected
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CargoFlowView() {
+  const quarantinedShipments = useMemo(
+    () => mockShipments.filter((s) => s.status === 'review_required' || s.status === 'pending'),
+    []
+  );
+
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    quarantinedShipments.length > 0 ? quarantinedShipments[0].id : null
+  );
+  const [detail, setDetail] = useState<ShipmentDetail | null>(() =>
+    quarantinedShipments.length > 0 ? getMockShipmentDetail(quarantinedShipments[0].id) : null
+  );
+
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId(id);
+    setDetail(getMockShipmentDetail(id));
   }, []);
 
-  const handleSaveCw = async () => {
-    setSaveResult(null);
-    // In a real implementation, this would call a settings API
-    setSaveResult("✓ Configuration saved (connectivity test required)");
-    setTimeout(() => setSaveResult(null), 3000);
-  };
+  return (
+    <div className="flex h-full">
+      {/* Quarantine Queue */}
+      <QuarantineQueue
+        shipments={quarantinedShipments}
+        selectedId={selectedId}
+        onSelect={handleSelect}
+      />
+
+      {/* Main Workspace */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Active Ingestion Header */}
+        <div
+          className="flex items-center justify-between px-4 py-2.5 shrink-0"
+          style={{
+            backgroundColor: COLORS.surface,
+            borderBottom: `1px solid ${COLORS.borderLight}`,
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold" style={{ color: COLORS.textPrimaryLight }}>
+              Active Ingestion Queue
+            </span>
+            <span
+              className="text-[11px] px-1.5 py-0.5 rounded font-medium"
+              style={{ backgroundColor: COLORS.orangeSubtle, color: COLORS.orange }}
+            >
+              {quarantinedShipments.length} items
+            </span>
+          </div>
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors"
+            style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+          >
+            <Upload size={14} />
+            Upload Document
+          </button>
+        </div>
+
+        {/* Split-Screen Workspace */}
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          {/* Left: Document Viewer */}
+          <div className="flex-1 flex min-w-0">
+            <DocumentViewer shipment={detail} />
+          </div>
+
+          {/* Right: AI Draft Form */}
+          <div
+            className="flex-1 flex min-w-0"
+            style={{ borderLeft: `1px solid ${COLORS.borderLight}` }}
+          >
+            <AIDraftForm shipment={detail} key={detail?.id ?? 'none'} />
+          </div>
+        </div>
+
+        {/* SARS Penalty Shield Banner */}
+        <SARSPenaltyShieldBanner shipment={detail} />
+
+        {/* Action Buttons */}
+        <div
+          className="flex items-center justify-end gap-3 px-4 py-3 shrink-0"
+          style={{
+            backgroundColor: COLORS.surface,
+            borderTop: `1px solid ${COLORS.borderLight}`,
+          }}
+        >
+          <button
+            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold border transition-colors"
+            style={{ borderColor: COLORS.error, color: COLORS.error, backgroundColor: 'transparent' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.errorBg)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <Ban size={15} />
+            Reject File
+          </button>
+          <button
+            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+            style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+          >
+            <ExternalLink size={15} />
+            Release to CargoWise
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   WISELAYER VIEW — Cost Guard & Agent Control
+   ══════════════════════════════════════════════════════════════════════ */
+
+function XMLPayloadCompactor() {
+  const stats = mockXmlCompactorStats;
 
   return (
-    <div className="p-6 max-w-[1440px]">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Organisation */}
-        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
-            <Building2 size={16} style={{ color: "#B8860B" }} />
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>ORGANISATION</span>
+    <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.borderLight }}>
+      {/* Header */}
+      <div
+        className="px-4 py-3 flex items-center gap-2"
+        style={{ backgroundColor: COLORS.navy, borderBottom: `1px solid ${COLORS.navyBorder}` }}
+      >
+        <TrendingDown size={16} style={{ color: COLORS.orange }} />
+        <span className="text-[13px] font-semibold" style={{ color: COLORS.textPrimaryDark }}>
+          XML Payload Compactor
+        </span>
+      </div>
+
+      {/* KPI Grid */}
+      <div className="p-4">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div
+            className="rounded-lg p-4 text-center"
+            style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+          >
+            <div className="text-2xl font-bold font-mono" style={{ color: COLORS.textPrimaryLight }}>
+              {stats.projectedTxCount.toLocaleString()}
+            </div>
+            <div className="text-[11px] uppercase tracking-wider mt-1" style={{ color: COLORS.textTertiary }}>
+              Projected Tx Count
+            </div>
           </div>
-          <div className="p-4 space-y-4">
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Organisation Name</label>
-              <input value={orgName} onChange={(e) => setOrgName(e.target.value)} className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
+          <div
+            className="rounded-lg p-4 text-center"
+            style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+          >
+            <div className="text-2xl font-bold font-mono" style={{ color: COLORS.success }}>
+              {stats.compactedSavingsPercent}%
             </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Plan</label>
-              <div className="px-3 py-2 text-[13px] rounded-md border" style={{ borderColor: "#C8D0DA", backgroundColor: "#F1F4F8", color: "#0D1B2A" }}>Professional — South Africa</div>
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Confidence Threshold</label>
-              <select className="w-full px-3 py-2 text-[13px] border rounded-md outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
-                <option value="high">High — Only auto-approve high confidence</option>
-                <option value="medium">Medium — Auto-approve medium and above</option>
-                <option value="low">Low — Auto-approve all except low</option>
-              </select>
+            <div className="text-[11px] uppercase tracking-wider mt-1" style={{ color: COLORS.textTertiary }}>
+              Compacted Savings
             </div>
           </div>
         </div>
 
-        {/* CargoWise Configuration */}
-        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
-            <Server size={16} style={{ color: "#B8860B" }} />
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>CARGOWISE CONFIGURATION</span>
+        {/* Monthly Savings */}
+        <div
+          className="rounded-lg p-4"
+          style={{ backgroundColor: COLORS.orangeSubtle, border: `1px solid ${COLORS.orangeBorder}` }}
+        >
+          <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: COLORS.warningDark }}>
+            Calculated Monthly Savings
           </div>
-          <div className="p-4 space-y-4">
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>eAdaptor Server URL</label>
-              <input value={cwServerUrl} onChange={(e) => setCwServerUrl(e.target.value)} placeholder="https://your-cw-instance.com/eAdaptor" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Enterprise ID</label>
-              <input value={cwEnterpriseId} onChange={(e) => setCwEnterpriseId(e.target.value)} placeholder="Enter CW Enterprise ID" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Server ID</label>
-              <input value={cwServerId} onChange={(e) => setCwServerId(e.target.value)} placeholder="Enter CW Server ID" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Credentials (Base64)</label>
-              <input value={cwCredentials} onChange={(e) => setCwCredentials(e.target.value)} type="password" placeholder="Enter Basic Auth credentials" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
-            </div>
-            <button onClick={handleSaveCw} className="px-4 py-2 rounded-md text-[13px] font-semibold text-white" style={{ backgroundColor: "#B8860B" }}>Save Configuration</button>
-            {saveResult && <div className="text-[12px] font-medium text-emerald-700">{saveResult}</div>}
+          <div className="text-3xl font-bold" style={{ color: COLORS.orange }}>
+            {formatZAR(stats.monthlySavingsZAR)}
           </div>
-        </div>
-
-        {/* Email Configuration */}
-        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
-            <Mail size={16} style={{ color: "#B8860B" }} />
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>EMAIL CONNECTION</span>
-          </div>
-          <div className="p-4 space-y-4">
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>IMAP Server</label>
-              <input placeholder="imap.your-company.co.za" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Email Address</label>
-              <input placeholder="cargoiq@your-company.co.za" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Password / App Key</label>
-              <input type="password" placeholder="••••••••" className="w-full px-3 py-2 text-[13px] border rounded-md outline-none focus:border-[#B8860B]" style={{ borderColor: "#C8D0DA", color: "#0D1B2A" }} />
-            </div>
-            <div className="rounded-md p-3 text-[12px]" style={{ backgroundColor: "#FEF6E7", borderColor: "#E8B84B", color: "#7A4F00", border: "1px solid #E8B84B" }}>
-              Email ingestion is active via the /api/ingest/email webhook. Configure your email provider to POST incoming messages.
-            </div>
-          </div>
-        </div>
-
-        {/* User Management */}
-        <div className="rounded-lg border" style={{ backgroundColor: "#FFFFFF", borderColor: "#C8D0DA" }}>
-          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: "#DDE3EA" }}>
-            <Users size={16} style={{ color: "#B8860B" }} />
-            <span className="text-[13px] font-semibold" style={{ color: "#3D5166" }}>USER MANAGEMENT</span>
-          </div>
-          <div className="p-4">
-            <div className="space-y-2">
-              {[
-                { name: "J. Mokoena", email: "jmokoena@cargoiq.co.za", role: "Admin" },
-                { name: "A. Naidoo", email: "anaidoo@cargoiq.co.za", role: "Operator" },
-                { name: "S. van der Merwe", email: "svdmerwe@cargoiq.co.za", role: "Compliance" },
-              ].map((user) => (
-                <div key={user.email} className="flex items-center gap-3 p-2 rounded-md border" style={{ borderColor: "#DDE3EA" }}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold" style={{ backgroundColor: "#B8860B", color: "#FFF" }}>
-                    {user.name.split(" ").map((n) => n[0]).join("")}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-[12px] font-medium" style={{ color: "#0D1B2A" }}>{user.name}</div>
-                    <div className="text-[11px]" style={{ color: "#6B7E92" }}>{user.email}</div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">{user.role}</span>
-                </div>
-              ))}
-            </div>
-            <button className="mt-3 px-4 py-2 text-[12px] rounded-md border hover:bg-[#F1F4F8] transition-colors" style={{ borderColor: "#C8D0DA", color: "#3D5166" }}>+ Add User</button>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-[11px]" style={{ color: COLORS.textTertiary }}>
+              YTD Savings:
+            </span>
+            <span className="text-[14px] font-bold" style={{ color: COLORS.accent }}>
+              {formatZARShort(stats.ytdSavingsZAR)}
+            </span>
           </div>
         </div>
       </div>
@@ -1692,145 +1334,264 @@ function SettingsView() {
   );
 }
 
-/* ══════════════════════════════════════════════
-   Document Upload Dialog
-   ══════════════════════════════════════════════ */
+function RLASentinel() {
+  const statuses = mockRlaStatuses;
 
-function DocumentUploadDialog({ open, onClose, onShipmentCreated }: {
-  open: boolean; onClose: () => void; onShipmentCreated: (id: string) => void;
-}) {
-  const [file, setFile] = useState<File | null>(null);
-  const [docType, setDocType] = useState("commercial_invoice");
-  const [source, setSource] = useState("manual_upload");
-  const [processing, setProcessing] = useState(false);
-  const [progress, setProgress] = useState<string>("");
-  const [result, setResult] = useState<{ success: boolean; shipment?: { id: string; reference: string }; error?: string } | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) setFile(droppedFile);
-  };
-
-  const handleProcess = async () => {
-    if (!file) return;
-    setProcessing(true);
-    setProgress("Uploading document...");
-    setResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("docType", docType);
-      formData.append("source", source);
-
-      setProgress("Running AI extraction pipeline...");
-
-      const res = await fetch("/api/process", { method: "POST", body: formData });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setProgress("Processing complete!");
-        setResult({ success: true, shipment: data.shipment });
-      } else {
-        setProgress("Processing failed");
-        setResult({ success: false, error: data.error || data.message || "Unknown error" });
-      }
-    } catch (e) {
-      setProgress("Network error");
-      setResult({ success: false, error: e instanceof Error ? e.message : "Upload failed" });
+  const statusIcon = (status: RlaStatus['rlaStatus']) => {
+    switch (status) {
+      case 'active':
+        return <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS.success }} />;
+      case 'suspended':
+        return <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS.error }} />;
+      case 'inactive':
+        return <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#94A3B8' }} />;
     }
-    setProcessing(false);
   };
 
-  const handleClose = () => {
-    if (result?.success && result.shipment) {
-      onShipmentCreated(result.shipment.id);
-    }
-    setFile(null);
-    setResult(null);
-    setProgress("");
-    setProcessing(false);
-    onClose();
+  const statusLabel = (status: RlaStatus['rlaStatus']) => {
+    const map: Record<RlaStatus['rlaStatus'], { bg: string; color: string; label: string }> = {
+      active: { bg: COLORS.successBg, color: COLORS.successDark, label: 'ACTIVE' },
+      suspended: { bg: COLORS.errorBg, color: COLORS.errorDark, label: 'SUSPENDED' },
+      inactive: { bg: COLORS.surfaceSubtle, color: COLORS.textTertiary, label: 'INACTIVE' },
+    };
+    const s = map[status];
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
+        style={{ backgroundColor: s.bg, color: s.color }}
+      >
+        {statusIcon(status)}
+        {s.label}
+      </span>
+    );
   };
-
-  if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 mx-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[15px] font-semibold" style={{ color: "#0D1B2A" }}>Upload & Process Document</h3>
-          <button onClick={handleClose} className="p-1 rounded hover:bg-[#E8ECF1]" style={{ color: "#6B7E92" }}><X size={18} /></button>
+    <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.borderLight }}>
+      {/* Header */}
+      <div
+        className="px-4 py-3 flex items-center justify-between"
+        style={{ backgroundColor: COLORS.navy, borderBottom: `1px solid ${COLORS.navyBorder}` }}
+      >
+        <div className="flex items-center gap-2">
+          <Shield size={16} style={{ color: COLORS.orange }} />
+          <span className="text-[13px] font-semibold" style={{ color: COLORS.textPrimaryDark }}>
+            RLA Status Sentinel
+          </span>
         </div>
+        <span className="text-[11px]" style={{ color: COLORS.textSecondaryDark }}>
+          {statuses.filter((s) => s.rlaStatus === 'active').length} Active Accounts
+        </span>
+      </div>
 
-        {/* Drop Zone */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors mb-4 ${dragOver ? "border-[#B8860B] bg-[#FEF6E7]" : "border-[#C8D0DA] bg-[#F1F4F8]"}`}
-        >
-          <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); }} />
-          <Upload size={32} className="mx-auto mb-2" style={{ color: dragOver ? "#B8860B" : "#9AAAB8" }} />
-          <div className="text-[13px] font-medium" style={{ color: "#0D1B2A" }}>
-            {file ? file.name : "Drop a file here or click to browse"}
-          </div>
-          <div className="text-[11px] mt-1" style={{ color: "#6B7E92" }}>Supports PDF, images, Excel, Word</div>
-        </div>
-
-        {/* Options */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Document Type</label>
-            <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
-              <option value="commercial_invoice">Commercial Invoice</option>
-              <option value="packing_list">Packing List</option>
-              <option value="bill_of_lading">Bill of Lading</option>
-              <option value="air_waybill">Air Waybill</option>
-              <option value="customs_declaration">Customs Declaration</option>
-              <option value="unknown">Unknown / Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wider block mb-1" style={{ color: "#6B7E92" }}>Source</label>
-            <select value={source} onChange={(e) => setSource(e.target.value)} className="w-full px-3 py-2 text-[13px] rounded-md border outline-none" style={{ borderColor: "#C8D0DA", color: "#0D1B2A", backgroundColor: "#FFFFFF" }}>
-              <option value="manual_upload">Manual Upload</option>
-              <option value="email">Email</option>
-              <option value="whatsapp">WhatsApp</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Process Button */}
-        <button
-          onClick={handleProcess}
-          disabled={!file || processing}
-          className="w-full py-2.5 rounded-md text-[13px] font-semibold text-white disabled:opacity-50 mb-4"
-          style={{ backgroundColor: "#B8860B" }}
-        >
-          {processing ? <><Loader2 size={14} className="animate-spin inline mr-2" />{progress}</> : "Process Document"}
-        </button>
-
-        {/* Result */}
-        {result && (
-          <div className={`rounded-md p-3 text-[12px] ${result.success ? "border" : "border"}`} style={{
-            backgroundColor: result.success ? "#EBF5EE" : "#FEF2F2",
-            borderColor: result.success ? "#C6E4CE" : "#F5A5A5",
-            color: result.success ? "#15632A" : "#9B1C1C",
-          }}>
-            {result.success ? (
+      {/* Importer List */}
+      <div
+        className="max-h-64 overflow-y-auto"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: `${COLORS.borderLight} transparent` }}
+      >
+        {statuses.map((r) => (
+          <div
+            key={r.id}
+            className="flex items-center justify-between px-4 py-2.5 border-b transition-colors"
+            style={{ borderColor: COLORS.borderSubtle }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.canvas)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <div className="flex items-center gap-2.5">
+              {statusIcon(r.rlaStatus)}
               <div>
-                <div className="font-semibold mb-1">✓ Shipment Created: {result.shipment?.reference}</div>
-                <button onClick={handleClose} className="underline text-[11px]">View shipment →</button>
+                <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
+                  {r.importerName}
+                </div>
+                <div className="text-[10px] font-mono" style={{ color: COLORS.textTertiary }}>
+                  {r.importerCode}
+                </div>
               </div>
-            ) : (
-              <div>✗ {result.error}</div>
+            </div>
+            {statusLabel(r.rlaStatus)}
+          </div>
+        ))}
+      </div>
+
+      {/* Audit Button */}
+      <div className="px-4 py-3">
+        <button
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-[12px] font-semibold border transition-colors"
+          style={{ borderColor: COLORS.orange, color: COLORS.orange, backgroundColor: 'transparent' }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeSubtle)}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+        >
+          <RefreshCw size={14} />
+          Run eFiling Audit Now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function WebwrightTerminal() {
+  const [prompt, setPrompt] = useState('');
+  const [targetUrl, setTargetUrl] = useState('');
+  const [isRunning, setIsRunning] = useState(false);
+  const [outputLines, setOutputLines] = useState<string[]>([]);
+  const terminalRef = useRef<HTMLDivElement>(null);
+
+  const prevExecutions = mockWebwrightExecutions;
+
+  const handleExecute = useCallback(() => {
+    if (!prompt.trim() || isRunning) return;
+    setIsRunning(true);
+    setOutputLines([]);
+
+    const lines = [
+      '[system] Spawning isolated Webwright sandbox...',
+      `[webwright] Launching Chromium headless...`,
+      `[webwright] Navigating to ${targetUrl || 'https://transnet.portauthority.co.za'}...`,
+      `[webwright] Entering credentials...`,
+      `[webwright] Executing prompt: "${prompt}"`,
+    ];
+
+    let idx = 0;
+    const interval = setInterval(() => {
+      if (idx < lines.length) {
+        setOutputLines((prev) => [...prev, lines[idx]]);
+        idx++;
+      } else {
+        clearInterval(interval);
+        setTimeout(() => {
+          setOutputLines((prev) => [
+            ...prev,
+            '[webwright] Status: SUCCESS',
+            `[stdout] Task completed. Container MSCU${Math.floor(1000000 + Math.random() * 9000000)} is located in STACK_${String.fromCharCode(65 + Math.floor(Math.random() * 5))}, Row ${Math.floor(Math.random() * 10) + 1}.`,
+          ]);
+          setIsRunning(false);
+        }, 600);
+      }
+    }, 500);
+  }, [prompt, targetUrl, isRunning]);
+
+  // Auto-scroll terminal
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [outputLines]);
+
+  return (
+    <div className="rounded-lg border overflow-hidden" style={{ borderColor: '#333' }}>
+      {/* Header */}
+      <div
+        className="px-4 py-3 flex items-center gap-2"
+        style={{ backgroundColor: '#1A1A1A', borderBottom: '1px solid #333' }}
+      >
+        <Terminal size={16} style={{ color: COLORS.orange }} />
+        <span className="text-[13px] font-semibold" style={{ color: COLORS.orange }}>
+          Webwright Autonomous Agent Terminal
+        </span>
+      </div>
+
+      {/* Input Area */}
+      <div className="p-4" style={{ backgroundColor: '#0D0D0D' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: '#666' }}>
+              Prompt
+            </label>
+            <input
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="e.g. Log into Durban Port, check container MSCU1234567..."
+              className="w-full px-3 py-2 text-[13px] rounded border outline-none"
+              style={{
+                backgroundColor: '#1A1A1A',
+                borderColor: '#333',
+                color: COLORS.orange,
+                fontFamily: 'var(--font-geist-mono), monospace',
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && handleExecute()}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: '#666' }}>
+              Target URL
+            </label>
+            <input
+              value={targetUrl}
+              onChange={(e) => setTargetUrl(e.target.value)}
+              placeholder="https://transnet.portauthority.co.za"
+              className="w-full px-3 py-2 text-[13px] rounded border outline-none"
+              style={{
+                backgroundColor: '#1A1A1A',
+                borderColor: '#333',
+                color: COLORS.orange,
+                fontFamily: 'var(--font-geist-mono), monospace',
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && handleExecute()}
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleExecute}
+          disabled={isRunning || !prompt.trim()}
+          className="flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-semibold transition-colors"
+          style={{
+            backgroundColor: isRunning ? '#333' : COLORS.orange,
+            color: isRunning ? '#666' : '#FFF',
+            cursor: isRunning ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {isRunning ? <Loader2Animated size={14} /> : <Play size={14} />}
+          {isRunning ? 'Executing...' : 'Execute Webwright Task'}
+        </button>
+      </div>
+
+      {/* Terminal Output */}
+      <div
+        ref={terminalRef}
+        className="max-h-64 overflow-y-auto p-4"
+        style={{
+          backgroundColor: '#000',
+          borderTop: '1px solid #333',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#333 transparent',
+        }}
+      >
+        {/* Previous execution output */}
+        {prevExecutions.map((exec) => (
+          <div key={exec.id} className="mb-4">
+            {exec.output.map((line, i) => (
+              <div
+                key={i}
+                className="text-[12px] font-mono leading-relaxed"
+                style={{ color: line.includes('[system]') ? '#666' : line.includes('SUCCESS') ? COLORS.success : COLORS.orange }}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
+        ))}
+
+        {/* Live execution output */}
+        {outputLines.length > 0 && (
+          <div className="mb-2">
+            {outputLines.map((line, i) => (
+              <div
+                key={i}
+                className="text-[12px] font-mono leading-relaxed"
+                style={{ color: line.includes('[system]') ? '#666' : line.includes('SUCCESS') ? COLORS.success : COLORS.orange }}
+              >
+                {line}
+              </div>
+            ))}
+            {isRunning && (
+              <span className="inline-block w-2 h-4 animate-pulse" style={{ backgroundColor: COLORS.orange }} />
             )}
+          </div>
+        )}
+
+        {!isRunning && outputLines.length === 0 && prevExecutions.length === 0 && (
+          <div className="text-[12px] font-mono" style={{ color: '#444' }}>
+            No executions yet. Enter a prompt and click Execute.
           </div>
         )}
       </div>
@@ -1838,159 +1599,336 @@ function DocumentUploadDialog({ open, onClose, onShipmentCreated }: {
   );
 }
 
-/* ══════════════════════════════════════════════
-   Footer
-   ══════════════════════════════════════════════ */
-
-function Footer() {
+/* Simple animated loader component */
+function Loader2Animated({ size }: { size: number }) {
   return (
-    <footer className="mt-auto border-t px-5 py-3" style={{ backgroundColor: "#F1F4F8", borderColor: "#C8D0DA" }}>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]" style={{ color: "#6B7E92" }}>
-        <span>© 2026 CARGOiQ — AI Compliance & Cost Containment Platform</span>
-        <span>Built for South African Freight Forwarders · SARS 2025/2026 Enforcement Ready</span>
-      </div>
-    </footer>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="animate-spin"
+    >
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </svg>
   );
 }
 
-/* ══════════════════════════════════════════════
-   Main Page
-   ══════════════════════════════════════════════ */
+function WiseLayerView() {
+  return (
+    <div className="p-6 max-w-[1440px]">
+      {/* Top Row: XML Compactor + RLA Sentinel */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <XMLPayloadCompactor />
+        <RLASentinel />
+      </div>
 
-export default function CargoIQPage() {
-  const [view, setView] = useState<ViewMode>("dashboard");
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [notifications, setNotifications] = useState<WsNotification[]>([]);
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [wsCreatedShipment, setWsCreatedShipment] = useState<ShipmentSummary | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+      {/* Bottom Row: Webwright Terminal (full width) */}
+      <WebwrightTerminal />
+    </div>
+  );
+}
 
-  // Seed demo data on first load
-  useEffect(() => {
-    fetch("/api/health").then(() => {
-      // Check if we have data; if not, seed
-      fetch("/api/shipments?limit=1").then(r => r.json()).then((data: ShipmentListResponse) => {
-        if (data.total === 0) {
-          fetch("/api/seed", { method: "POST" }).then(() => {
-            console.log("[CargoIQ] Demo data seeded");
-          }).catch(() => {});
-        }
-      }).catch(() => {});
-    }).catch(() => {});
-  }, []);
+/* ══════════════════════════════════════════════════════════════════════
+   SETTINGS VIEW
+   ══════════════════════════════════════════════════════════════════════ */
 
-  // WebSocket connection
-  useEffect(() => {
-    const socket = io({
-      transports: ["websocket"],
-      path: "/socket.io",
-      query: { XTransformPort: "3003" },
-    });
+function SettingsView() {
+  const [activeTab, setActiveTab] = useState<'general' | 'api' | 'agents' | 'notifications'>('general');
 
-    socket.on("connect", () => {
-      setWsConnected(true);
-      console.log("[WS] Connected:", socket.id);
-    });
-
-    socket.on("disconnect", () => {
-      setWsConnected(false);
-      console.log("[WS] Disconnected");
-    });
-
-    const events = ["shipment:created", "shipment:updated", "shipment:approved", "shipment:rejected", "shield:completed", "cw:draft_created", "cw:draft_failed", "email:ingested", "extraction:complete", "notification"];
-    for (const event of events) {
-      socket.on(event, (data: WsNotification) => {
-        console.log(`[WS] ${event}:`, data);
-        setNotificationCount((c) => c + 1);
-        setNotifications((prev) => [{ ...data, type: data.type || event }, ...prev].slice(0, 10));
-
-        // If new shipment created, add it to the queue
-        if (event === "shipment:created" && data.shipmentId) {
-          setWsCreatedShipment({
-            id: data.shipmentId as string,
-            reference: (data.reference as string) || "CIQ-NEW",
-            shipperName: (data.shipperName as string) || "",
-            consigneeName: "",
-            originPort: "",
-            destinationPort: "",
-            shipmentType: "",
-            awbOrBlNumber: "",
-            overallConfidence: "medium",
-            shieldStatus: "pending",
-            status: "pending",
-            documentCount: 0,
-            createdAt: new Date().toISOString(),
-          });
-        }
-      });
-    }
-
-    socketRef.current = socket;
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
-
-  const handleSelectShipment = (id: string) => {
-    setSelectedShipmentId(id);
-    setView("shipment-detail");
-  };
-
-  const handleUploadCreated = (id: string) => {
-    setSelectedShipmentId(id);
-    setView("shipment-detail");
-  };
-
-  const currentNotification = notifications[0] || null;
+  const tabs = [
+    { key: 'general' as const, label: 'General', icon: Settings },
+    { key: 'api' as const, label: 'API Keys', icon: Globe },
+    { key: 'agents' as const, label: 'Agent Config', icon: Activity },
+    { key: 'notifications' as const, label: 'Notifications', icon: Bell },
+  ];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#F1F4F8" }}>
+    <div className="p-6 max-w-[900px]">
+      <h3 className="text-[18px] font-semibold mb-4" style={{ color: COLORS.textPrimaryLight }}>
+        Settings
+      </h3>
+
+      {/* Tab Bar */}
+      <div
+        className="flex gap-1 mb-6 p-1 rounded-lg"
+        style={{ backgroundColor: COLORS.canvas }}
+      >
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors flex-1 justify-center"
+              style={{
+                backgroundColor: active ? COLORS.surface : 'transparent',
+                color: active ? COLORS.textPrimaryLight : COLORS.textTertiary,
+                boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              }}
+            >
+              <Icon size={15} />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab Content */}
+      <div className="rounded-lg border p-6" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.borderLight }}>
+        {activeTab === 'general' && (
+          <div className="space-y-5">
+            <div>
+              <label className="text-[12px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: COLORS.textTertiary }}>
+                Organisation Name
+              </label>
+              <input
+                defaultValue="Calthol CC — Customs Division"
+                className="w-full px-3 py-2 text-[13px] rounded-md border outline-none"
+                style={{ borderColor: COLORS.borderLight, color: COLORS.textPrimaryLight, backgroundColor: COLORS.canvas }}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: COLORS.textTertiary }}>
+                SARS Declarant Code
+              </label>
+              <input
+                defaultValue="50123456789"
+                className="w-full px-3 py-2 text-[13px] font-mono rounded-md border outline-none"
+                style={{ borderColor: COLORS.borderLight, color: COLORS.textPrimaryLight, backgroundColor: COLORS.canvas }}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: COLORS.textTertiary }}>
+                Default Port
+              </label>
+              <select
+                defaultValue="ZADUR"
+                className="w-full px-3 py-2 text-[13px] rounded-md border outline-none"
+                style={{ borderColor: COLORS.borderLight, color: COLORS.textPrimaryLight, backgroundColor: COLORS.canvas }}
+              >
+                <option value="ZADUR">ZADUR — Durban</option>
+                <option value="ZACPT">ZACPT — Cape Town</option>
+                <option value="ZAJNB">ZAJNB — Johannesburg</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
+                  Auto-Release High Confidence
+                </div>
+                <div className="text-[11px]" style={{ color: COLORS.textTertiary }}>
+                  Automatically release shipments with &gt;95% confidence
+                </div>
+              </div>
+              <div
+                className="w-10 h-5 rounded-full relative cursor-pointer"
+                style={{ backgroundColor: COLORS.success }}
+              >
+                <div
+                  className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
+                  style={{ left: 22 }}
+                />
+              </div>
+            </div>
+            <button
+              className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+              style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+            >
+              Save Changes
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'api' && (
+          <div className="space-y-4">
+            {[
+              { name: 'CargoWise API Key', value: 'cw_prod_****7a3f', connected: true },
+              { name: 'SARS eFiling Token', value: 'sars_ef_****2b1c', connected: true },
+              { name: 'OpenAI API Key', value: 'sk-****d8e9', connected: true },
+              { name: 'WhatsApp Business API', value: 'Not configured', connected: false },
+            ].map((api) => (
+              <div
+                key={api.name}
+                className="flex items-center justify-between p-3 rounded-lg border"
+                style={{ borderColor: COLORS.borderSubtle, backgroundColor: COLORS.canvas }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: api.connected ? COLORS.success : COLORS.textTertiary }}
+                  />
+                  <div>
+                    <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
+                      {api.name}
+                    </div>
+                    <div className="text-[11px] font-mono" style={{ color: COLORS.textTertiary }}>
+                      {api.value}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  className="text-[12px] font-medium px-2.5 py-1 rounded border transition-colors"
+                  style={{ borderColor: COLORS.borderLight, color: COLORS.textTertiary }}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = COLORS.orange)}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = COLORS.borderLight)}
+                >
+                  {api.connected ? 'Update' : 'Configure'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'agents' && (
+          <div className="space-y-4">
+            {[
+              { name: 'Webwright Agent', desc: 'Autonomous web scraping & form filling', enabled: true },
+              { name: 'XML Compactor', desc: 'Payload optimization for CargoWise', enabled: true },
+              { name: 'RLA Sentinel', desc: 'SARS RLA status monitoring & alerts', enabled: true },
+              { name: 'Email Ingestion', desc: 'Automated document extraction from email', enabled: true },
+              { name: 'VAT Engine', desc: 'Auto-calculate VAT for customs declarations', enabled: false },
+            ].map((agent) => (
+              <div
+                key={agent.name}
+                className="flex items-center justify-between p-3 rounded-lg border"
+                style={{ borderColor: COLORS.borderSubtle, backgroundColor: COLORS.canvas }}
+              >
+                <div>
+                  <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
+                    {agent.name}
+                  </div>
+                  <div className="text-[11px]" style={{ color: COLORS.textTertiary }}>
+                    {agent.desc}
+                  </div>
+                </div>
+                <div
+                  className="w-10 h-5 rounded-full relative cursor-pointer"
+                  style={{ backgroundColor: agent.enabled ? COLORS.success : COLORS.borderLight }}
+                >
+                  <div
+                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
+                    style={{ left: agent.enabled ? 22 : 2 }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'notifications' && (
+          <div className="space-y-4">
+            {[
+              { name: 'Shipment Created', desc: 'New shipment ingested from email/WhatsApp', enabled: true },
+              { name: 'Shield Alert', desc: 'Compliance shield hold or fail', enabled: true },
+              { name: 'CW Draft Created', desc: 'CargoWise draft successfully created', enabled: true },
+              { name: 'RLA Status Change', desc: 'Importer RLA suspended or reactivated', enabled: true },
+              { name: 'Daily Summary', desc: 'Daily email digest of queue status', enabled: false },
+            ].map((n) => (
+              <div
+                key={n.name}
+                className="flex items-center justify-between p-3 rounded-lg border"
+                style={{ borderColor: COLORS.borderSubtle, backgroundColor: COLORS.canvas }}
+              >
+                <div>
+                  <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
+                    {n.name}
+                  </div>
+                  <div className="text-[11px]" style={{ color: COLORS.textTertiary }}>
+                    {n.desc}
+                  </div>
+                </div>
+                <div
+                  className="w-10 h-5 rounded-full relative cursor-pointer"
+                  style={{ backgroundColor: n.enabled ? COLORS.success : COLORS.borderLight }}
+                >
+                  <div
+                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
+                    style={{ left: n.enabled ? 22 : 2 }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MAIN APP
+   ══════════════════════════════════════════════════════════════════════ */
+
+export default function CargoIQApp() {
+  const [view, setView] = useState<ViewMode>('cargoflow');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  const toggleSidebarCollapse = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+
+  const sidebarWidth = sidebarCollapsed ? 56 : 240;
+
+  const renderView = () => {
+    switch (view) {
+      case 'dashboard':
+        return <DashboardView />;
+      case 'cargoflow':
+        return <CargoFlowView />;
+      case 'wiselayer':
+        return <WiseLayerView />;
+      case 'settings':
+        return <SettingsView />;
+      default:
+        return <CargoFlowView />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: COLORS.canvas }}>
       <Sidebar
         view={view}
         setView={setView}
-        collapsed={collapsed}
-        toggleCollapse={() => setCollapsed(!collapsed)}
-        mobileOpen={mobileOpen}
-        onMobileClose={() => setMobileOpen(false)}
+        collapsed={sidebarCollapsed}
+        toggleCollapse={toggleSidebarCollapse}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
       />
       <TopNav
         view={view}
-        collapsed={collapsed}
-        onToggleMobileSidebar={() => setMobileOpen(true)}
-        onQuickUpload={() => setUploadOpen(true)}
-        wsConnected={wsConnected}
-        notificationCount={notificationCount}
+        collapsed={sidebarCollapsed}
+        onToggleMobileSidebar={() => setMobileSidebarOpen(true)}
       />
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <main
-        className={`flex-1 pt-14 transition-all duration-200 ${collapsed ? "md:ml-14" : "md:ml-60"}`}
+        className="flex-1 flex flex-col"
+        style={{
+          marginLeft: sidebarWidth,
+          paddingTop: 56, // topnav height
+          transition: 'margin-left 200ms cubic-bezier(0.4,0,0.2,1)',
+        }}
       >
-        {view === "dashboard" && <DashboardView setView={setView} onSelectShipment={handleSelectShipment} />}
-        {view === "shipments" && <ShipmentQueueView onSelectShipment={handleSelectShipment} wsCreatedShipment={wsCreatedShipment} />}
-        {view === "shipment-detail" && selectedShipmentId && <ShipmentDetailView shipmentId={selectedShipmentId} setView={setView} />}
-        {view === "compliance" && <ComplianceView />}
-        {view === "wiselayer" && <WiseLayerView />}
-        {view === "cargowise" && <CargoWiseView wsConnected={wsConnected} />}
-        {view === "settings" && <SettingsView />}
+        {/* CargoFlow uses full height, other views scroll normally */}
+        {view === 'cargoflow' ? (
+          <div className="flex-1 overflow-hidden">
+            <CargoFlowView />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+            {renderView()}
+          </div>
+        )}
       </main>
-
-      <Footer />
-
-      <DocumentUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onShipmentCreated={handleUploadCreated} />
-
-      {/* Notification Toast */}
-      {currentNotification && (
-        <NotificationToast
-          notification={currentNotification}
-          onDismiss={() => setNotifications((prev) => prev.slice(1))}
-        />
-      )}
     </div>
   );
 }
