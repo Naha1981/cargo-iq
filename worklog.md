@@ -69,6 +69,32 @@ Stage Summary:
 - Application compiles and serves successfully
 
 ---
+Task ID: 3
+Agent: Main Agent
+Task: Add Copy-Paste Clipboard Workflows — Individual Field Copy + Copy eAdaptor XML
+
+Work Log:
+- Added `Copy` and `ClipboardCopy` icons from lucide-react imports
+- Added `copiedField` state and `copyFieldToClipboard` handler to AIDraftForm
+- Added `copiedField` and `onCopyField` props to AIEditableFormField component
+- Each field now has a "Copy" button that copies the field value to clipboard, shows "Copied" for 1.5s
+- Timer cleanup on unmount via `copiedTimerRef`
+- Added `xmlCopied` state and `handleCopyXml` handler to CargoFlowView
+- `handleCopyXml` maps ShipmentDetail → ShipmentData → generates UniversalShipment XML via `cargowise-xml.ts` → copies to clipboard
+- Added "Copy eAdaptor XML" button in hybrid workflow footer alongside Reject and Release via API
+- Added workflow hint text: "Copy fields individually or copy full XML for manual CargoWise import"
+- Added AWB/BL and Cargo Description fields to AIDraftForm (previously missing)
+- Added corresponding fields to formValues initializer
+- Renamed "Release to CargoWise" → "Release via API" to clarify distinction from manual copy
+- Verified all renders and compiles without errors
+
+Stage Summary:
+- Workflow 1: Individual field copy buttons working — every AI-extracted field has a "Copy" button
+- Workflow 2: "Copy eAdaptor XML" button generates full UniversalShipment XML and copies to clipboard
+- Zero-integration workflow fully functional — operators can use CargoIQ without CargoWise API connection
+- All existing functionality preserved — no regressions
+
+---
 Task ID: 1
 Agent: full-stack-developer
 Task: Enhance CargoIQ frontend with pipeline visualization, WiseLayer tables, CW connected state, footer, mobile responsive sidebar, and quick upload button

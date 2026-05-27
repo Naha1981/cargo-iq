@@ -38,6 +38,8 @@ import {
   QrCode,
   Server,
   Sliders,
+  Copy,
+  ClipboardCopy,
 } from 'lucide-react';
 import {
   mockShipments,
@@ -47,6 +49,7 @@ import {
   mockWebwrightExecutions,
   getMockShipmentDetail,
 } from '@/lib/mock-data';
+import { generateShipmentXml, type ShipmentData, type OrgData } from '@/lib/cargowise-xml';
 import type {
   ViewMode,
   ShipmentSummary,
@@ -838,6 +841,8 @@ function AIEditableFormField({
   editValue,
   onEditValueChange,
   mono = false,
+  copiedField,
+  onCopyField,
 }: {
   label: string;
   value: string | number | null;
@@ -850,6 +855,8 @@ function AIEditableFormField({
   editValue: string;
   onEditValueChange: (v: string) => void;
   mono?: boolean;
+  copiedField: string | null;
+  onCopyField: (fieldKey: string, value: string) => void;
 }) {
   const borderColor =
     confidence === 'high'
@@ -871,6 +878,16 @@ function AIEditableFormField({
           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(245, 158, 11)' }} />
         )}
         {showWarning && <AlertCircle size={12} style={{ color: COLORS.orange }} />}
+        <button
+          onClick={(e) => { e.stopPropagation(); onCopyField(fieldKey, displayValue); }}
+          className="ml-auto flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors px-1.5 py-0.5 rounded"
+          style={{ color: copiedField === fieldKey ? COLORS.success : COLORS.orange, backgroundColor: copiedField === fieldKey ? COLORS.successBg : 'transparent' }}
+          title="Copy to clipboard"
+          aria-label={`Copy ${label} to clipboard`}
+        >
+          {copiedField === fieldKey ? <Check size={11} /> : <Copy size={11} />}
+          {copiedField === fieldKey ? 'Copied' : 'Copy'}
+        </button>
       </div>
       {isEditing ? (
         <div className="flex gap-1.5">
@@ -936,6 +953,8 @@ function AIDraftForm({
 }) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [formValues, setFormValues] = useState<Record<string, string | number | null>>(() => {
     if (!shipment) return {};
@@ -953,6 +972,8 @@ function AIDraftForm({
       vesselOrFlight: shipment.vesselOrFlight,
       eta: shipment.eta,
       etd: shipment.etd,
+      awbOrBlNumber: shipment.awbOrBlNumber,
+      cargoDescription: shipment.cargoDescription,
     };
   });
 
@@ -973,6 +994,26 @@ function AIDraftForm({
 
   const handleEditCancel = useCallback(() => {
     setEditingField(null);
+  }, []);
+
+  // Cleanup copied timer on unmount
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
+
+  const copyFieldToClipboard = useCallback((fieldKey: string, value: string) => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopiedField(fieldKey);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopiedField(null), 1500);
+    }).catch(() => {
+      // Fallback: still show feedback even if clipboard API fails
+      setCopiedField(fieldKey);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopiedField(null), 1500);
+    });
   }, []);
 
   if (!shipment) {
@@ -1004,6 +1045,8 @@ function AIDraftForm({
     { label: 'Vessel/Flight', key: 'vesselOrFlight', confidence: 'high' as Confidence, mono: false },
     { label: 'ETA', key: 'eta', confidence: 'high' as Confidence, mono: true },
     { label: 'ETD', key: 'etd', confidence: 'high' as Confidence, mono: true },
+    { label: 'AWB/BL', key: 'awbOrBlNumber', confidence: 'high' as Confidence, mono: true },
+    { label: 'Cargo', key: 'cargoDescription', confidence: 'high' as Confidence, mono: false },
   ];
 
   return (
@@ -1042,6 +1085,8 @@ function AIDraftForm({
               editValue={editValue}
               onEditValueChange={setEditValue}
               mono={f.mono}
+              copiedField={copiedField}
+              onCopyField={copyFieldToClipboard}
             />
           ))}
         </div>
@@ -1171,6 +1216,10 @@ function CargoFlowView() {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
+
+  // Copy XML state
+  const [xmlCopied, setXmlCopied] = useState(false);
+  const xmlCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -1347,6 +1396,75 @@ function CargoFlowView() {
     };
   }, []);
 
+  // ── Copy eAdaptor XML ─────────────────────────────────────────────────
+  const handleCopyXml = useCallback(() => {
+    if (!detail) return;
+
+    // Map shipment detail to the ShipmentData format expected by generateShipmentXml
+    const shipmentData: ShipmentData = {
+      id: detail.id,
+      reference: detail.reference,
+      shipperName: detail.shipperName,
+      shipperAddress: detail.shipperAddress,
+      consigneeName: detail.consigneeName,
+      consigneeAddress: detail.consigneeAddress,
+      notifyParty: detail.notifyParty,
+      originPort: detail.originPort,
+      destinationPort: detail.destinationPort,
+      cargoDescription: detail.cargoDescription,
+      hsCodePrimary: detail.hsCodePrimary,
+      grossWeight: detail.grossWeight,
+      netWeight: detail.netWeight,
+      weightUnit: detail.weightUnit || 'KG',
+      numberOfPackages: detail.numberOfPackages,
+      incoterms: detail.incoterms,
+      invoiceNumber: detail.invoiceNumber,
+      invoiceValue: detail.invoiceValue,
+      currency: detail.currency || 'ZAR',
+      awbOrBlNumber: detail.awbOrBlNumber,
+      vesselOrFlight: detail.vesselOrFlight,
+      eta: detail.eta,
+      etd: detail.etd,
+      shipmentType: detail.shipmentType,
+      lineItems: (detail.lineItems || []).map((li) => ({
+        lineNumber: li.lineNumber,
+        hsCode: li.hsCode,
+        description: li.description,
+        quantity: li.quantity,
+        unit: null,
+        totalWeight: li.totalWeight,
+        totalValue: li.totalValue,
+        currency: detail.currency || 'ZAR',
+      })),
+    };
+
+    // Default org data (in production this would come from the authenticated user's org)
+    const orgData: OrgData = {
+      id: 'org_calthol',
+      name: 'Calthol CC',
+      cwEnterpriseId: null,
+      cwServerId: null,
+    };
+
+    const xml = generateShipmentXml(shipmentData, orgData);
+
+    navigator.clipboard.writeText(xml).then(() => {
+      setXmlCopied(true);
+      if (xmlCopiedTimerRef.current) clearTimeout(xmlCopiedTimerRef.current);
+      xmlCopiedTimerRef.current = setTimeout(() => setXmlCopied(false), 2500);
+      toast({
+        title: 'eAdaptor XML Copied',
+        description: 'UniversalShipment XML copied to clipboard. Paste into CargoWise Import Universal XML dialog.',
+      });
+    }).catch(() => {
+      toast({
+        title: 'Copy Failed',
+        description: 'Could not copy XML to clipboard. Please try again.',
+        variant: 'destructive',
+      });
+    });
+  }, [detail]);
+
   return (
     <div className="flex h-full">
       {/* Hidden file input for upload */}
@@ -1468,47 +1586,77 @@ function CargoFlowView() {
           </div>
         )}
 
-        {/* Action Buttons */}
+        {/* Action Buttons — Hybrid Workflow Footer */}
         <div
-          className="flex items-center justify-end gap-3 px-4 py-3 shrink-0"
+          className="px-4 py-3 shrink-0"
           style={{
             backgroundColor: COLORS.surface,
             borderTop: `1px solid ${COLORS.borderLight}`,
           }}
         >
-          <button
-            onClick={handleRejectClick}
-            disabled={showRejectForm || isRejecting}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold border transition-colors disabled:opacity-50"
-            style={{ borderColor: COLORS.error, color: COLORS.error, backgroundColor: 'transparent' }}
-            onMouseEnter={(e) => { if (!showRejectForm) e.currentTarget.style.backgroundColor = COLORS.errorBg; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-          >
-            <Ban size={15} />
-            Reject File
-          </button>
-          <button
-            onClick={handleReleaseClick}
-            disabled={isReleasing || !selectedId}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors disabled:opacity-50"
-            style={{
-              backgroundColor: releaseConfirm ? COLORS.success : COLORS.orange,
-              color: 'rgb(255, 255, 255)',
-            }}
-            onMouseEnter={(e) => {
-              if (!isReleasing) e.currentTarget.style.backgroundColor = releaseConfirm ? 'rgb(5, 150, 105)' : COLORS.orangeHover;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = releaseConfirm ? COLORS.success : COLORS.orange;
-            }}
-          >
-            {isReleasing ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <ExternalLink size={15} />
-            )}
-            {isReleasing ? 'Releasing…' : releaseConfirm ? 'Confirm Release?' : 'Release to CargoWise'}
-          </button>
+          {/* Workflow hint */}
+          <div className="flex items-center gap-2 mb-2">
+            <ClipboardCopy size={12} style={{ color: COLORS.textTertiary }} />
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: COLORS.textTertiary }}>
+              Copy fields individually or copy full XML for manual CargoWise import — no API connection needed.
+            </span>
+          </div>
+          <div className="flex items-center justify-end gap-3">
+            {/* Copy eAdaptor XML — Offline Manual Workflow */}
+            <button
+              onClick={handleCopyXml}
+              disabled={!detail || xmlCopied}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold border transition-colors disabled:opacity-50"
+              style={{
+                borderColor: xmlCopied ? COLORS.success : COLORS.navyBorder,
+                color: xmlCopied ? COLORS.success : COLORS.textPrimaryLight,
+                backgroundColor: xmlCopied ? COLORS.successBg : 'transparent',
+              }}
+              onMouseEnter={(e) => { if (!xmlCopied) e.currentTarget.style.backgroundColor = COLORS.canvas; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = xmlCopied ? COLORS.successBg : 'transparent'; }}
+              title="Copy the full eAdaptor UniversalShipment XML to clipboard. Paste into CargoWise Import Universal XML dialog."
+            >
+              {xmlCopied ? <Check size={15} /> : <ClipboardCopy size={15} />}
+              {xmlCopied ? 'XML Copied!' : 'Copy eAdaptor XML'}
+            </button>
+
+            {/* Reject */}
+            <button
+              onClick={handleRejectClick}
+              disabled={showRejectForm || isRejecting}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold border transition-colors disabled:opacity-50"
+              style={{ borderColor: COLORS.error, color: COLORS.error, backgroundColor: 'transparent' }}
+              onMouseEnter={(e) => { if (!showRejectForm) e.currentTarget.style.backgroundColor = COLORS.errorBg; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <Ban size={15} />
+              Reject File
+            </button>
+
+            {/* Release via API — Automated Workflow */}
+            <button
+              onClick={handleReleaseClick}
+              disabled={isReleasing || !selectedId}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: releaseConfirm ? COLORS.success : COLORS.orange,
+                color: 'rgb(255, 255, 255)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isReleasing) e.currentTarget.style.backgroundColor = releaseConfirm ? 'rgb(5, 150, 105)' : COLORS.orangeHover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = releaseConfirm ? COLORS.success : COLORS.orange;
+              }}
+            >
+              {isReleasing ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <ExternalLink size={15} />
+              )}
+              {isReleasing ? 'Releasing…' : releaseConfirm ? 'Confirm Release?' : 'Release via API'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
