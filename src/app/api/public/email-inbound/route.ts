@@ -11,17 +11,7 @@ import { generateReference } from "@/lib/reference-generator";
 import { runComplianceShield } from "@/lib/compliance-engine";
 import type { DocumentType, ExtractionResult } from "@/lib/prompts";
 import { notify } from "@/lib/notify";
-
-function portToCountryCode(port: string | null): string {
-  if (!port) return "";
-  return port.substring(0, 2).toUpperCase();
-}
-
-function estimateZarValue(valueUsd: number | null, currency: string | null): number {
-  if (!valueUsd) return 0;
-  const rate = currency === "GBP" ? 23.5 : currency === "EUR" ? 20.0 : 18.5;
-  return Math.round(valueUsd * rate * 100) / 100;
-}
+import { portToCountryCode, estimateZarValue } from '@/lib/api-utils';
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -373,9 +363,9 @@ export async function POST(request: NextRequest) {
       processingTimeMs: Date.now() - startTime,
     });
   } catch (error) {
-    console.error("[Email Inbound] Error:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
-      { error: "internal_error", message: error instanceof Error ? error.message : "Email ingestion failed" },
+      { error: "internal_error", message: "Failed to process inbound email" },
       { status: 500 }
     );
   }

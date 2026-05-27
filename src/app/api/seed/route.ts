@@ -367,9 +367,9 @@ export async function POST() {
       wiseTechDays: wtDates.length,
     });
   } catch (error) {
-    console.error("Error seeding database:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
-      { error: "internal_error", message: error instanceof Error ? error.message : "Failed to seed database" },
+      { error: "internal_error", message: "Failed to seed database" },
       { status: 500 }
     );
   }

@@ -8,22 +8,7 @@ import { extractFromDocument } from "@/lib/ai-extraction";
 import { generateReference } from "@/lib/reference-generator";
 import { runComplianceShield, ComplianceModule } from "@/lib/compliance-engine";
 import type { ExtractionResult, DocumentType } from "@/lib/prompts";
-
-// ─── Helper: derive origin country code from port ───────────────────────────
-
-function portToCountryCode(port: string | null): string {
-  if (!port) return "";
-  const prefix = port.substring(0, 2).toUpperCase();
-  return prefix;
-}
-
-// ─── Helper: estimate ZAR value ─────────────────────────────────────────────
-
-function estimateZarValue(valueUsd: number | null, currency: string | null): number {
-  if (!valueUsd) return 0;
-  const rate = currency === "GBP" ? 23.5 : currency === "EUR" ? 20.0 : 18.5; // rough ZAR rates
-  return Math.round(valueUsd * rate * 100) / 100;
-}
+import { portToCountryCode, estimateZarValue, safeJsonParse } from '@/lib/api-utils';
 
 // ─── POST handler ────────────────────────────────────────────────────────────
 
@@ -403,9 +388,9 @@ export async function POST(request: NextRequest) {
         consigneeName: fullShipment!.consigneeName,
         originPort: fullShipment!.originPort,
         destinationPort: fullShipment!.destinationPort,
-        extractedFields: JSON.parse(fullShipment!.extractedFields || "{}"),
-        confidenceScores: JSON.parse(fullShipment!.confidenceScores || "{}"),
-        shieldResults: JSON.parse(fullShipment!.shieldResults || "{}"),
+        extractedFields: safeJsonParse<Record<string, unknown>>(fullShipment!.extractedFields, {}),
+        confidenceScores: safeJsonParse<Record<string, unknown>>(fullShipment!.confidenceScores, {}),
+        shieldResults: safeJsonParse<Record<string, unknown>>(fullShipment!.shieldResults, {}),
         lineItems: fullShipment!.lineItems,
         complianceEvents: fullShipment!.complianceEvents,
         documents: fullShipment!.shipmentDocuments.map((sd) => ({
@@ -419,11 +404,11 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error in processing pipeline:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         error: "internal_error",
-        message: error instanceof Error ? error.message : "Processing pipeline failed",
+        message: "Failed to process document",
       },
       { status: 500 }
     );

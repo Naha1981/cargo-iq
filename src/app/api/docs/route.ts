@@ -7,10 +7,7 @@ export async function GET() {
     version: "2.0.0",
     description: "South Africa's AI compliance and cost containment platform for freight forwarders",
     supabase: {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      projectRef: process.env.SUPABASE_PROJECT_REF,
-      note: "Use these credentials in your Lovable frontend for Supabase Auth. The backend verifies JWT tokens from Supabase.",
+      note: "Supabase credentials are configured via environment variables. See .env.local for setup.",
     },
     auth: {
       type: "Bearer Token (Supabase JWT)",

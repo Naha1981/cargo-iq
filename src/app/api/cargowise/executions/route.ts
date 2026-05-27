@@ -69,11 +69,11 @@ export async function GET(request: NextRequest) {
       hasMore: offset + limit < total,
     });
   } catch (error) {
-    console.error("[CW Executions] Error:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         error: "Internal server error",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: "Failed to list executions",
       },
       { status: 500 }
     );

@@ -72,11 +72,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error running compliance audit:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         error: "internal_error",
-        message: error instanceof Error ? error.message : "Failed to run compliance audit",
+        message: "Failed to run compliance audit",
       },
       { status: 500 }
     );

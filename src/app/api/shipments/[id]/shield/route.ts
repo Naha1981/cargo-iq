@@ -2,17 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { runComplianceShield, ComplianceModule } from "@/lib/compliance-engine";
-
-function portToCountryCode(port: string | null): string {
-  if (!port) return "";
-  return port.substring(0, 2).toUpperCase();
-}
-
-function estimateZarValue(valueUsd: number | null, currency: string | null): number {
-  if (!valueUsd) return 0;
-  const rate = currency === "GBP" ? 23.5 : currency === "EUR" ? 20.0 : 18.5;
-  return Math.round(valueUsd * rate * 100) / 100;
-}
+import { portToCountryCode, estimateZarValue } from '@/lib/api-utils';
 
 export async function POST(
   _request: NextRequest,
@@ -138,11 +128,11 @@ export async function POST(
       blockCargowise: shieldResult.block_cargowise,
     });
   } catch (error) {
-    console.error("Error re-running compliance shield:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         error: "internal_error",
-        message: error instanceof Error ? error.message : "Failed to re-run compliance shield",
+        message: "Failed to run compliance shield",
       },
       { status: 500 }
     );

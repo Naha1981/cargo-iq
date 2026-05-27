@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   PackageSearch,
@@ -17,29 +17,22 @@ import {
   XCircle,
   Clock,
   FileText,
-  Search,
   Menu,
   X,
   Shield,
   Play,
-  DollarSign,
   TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
   Zap,
   AlertCircle,
-  Eye,
   Ban,
-  Send,
   Terminal,
-  Activity,
   RefreshCw,
-  ChevronDown,
   Edit3,
   Check,
   ExternalLink,
   Package,
-  Globe,
   Loader2,
   Wifi,
   QrCode,
@@ -140,18 +133,6 @@ function confidenceColor(pct: number): string {
   if (pct >= 85) return COLORS.success;
   if (pct >= 65) return 'rgb(245, 158, 11)';
   return COLORS.error;
-}
-
-function confidenceBgColor(pct: number): string {
-  if (pct >= 85) return 'rgb(209, 250, 229)';
-  if (pct >= 65) return 'rgb(254, 243, 199)';
-  return 'rgb(254, 226, 226)';
-}
-
-function confidenceLabel(pct: number): string {
-  if (pct >= 85) return 'High';
-  if (pct >= 65) return 'Medium';
-  return 'Low';
 }
 
 function getSourceIcon(source: IngestSource) {
@@ -689,7 +670,7 @@ function QuarantineQueue({
                 <span className="text-[11px]" style={{ color: COLORS.textTertiary }}>
                   {src.label}
                 </span>
-                <span className="text-[11px] ml-auto" style={{ color: COLORS.textTertiary }}>
+                <span className="text-[11px] ml-auto" style={{ color: COLORS.textTertiary }} suppressHydrationWarning>
                   {relativeTime(s.createdAt)}
                 </span>
               </div>
@@ -1610,6 +1591,14 @@ function RLASentinel() {
   const [statuses, setStatuses] = useState(mockRlaStatuses);
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
+  const auditClearTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup auto-clear timer on unmount
+  useEffect(() => {
+    return () => {
+      if (auditClearTimerRef.current) clearTimeout(auditClearTimerRef.current);
+    };
+  }, []);
 
   const statusIcon = (status: RlaStatus['rlaStatus']) => {
     switch (status) {
@@ -1698,7 +1687,7 @@ function RLASentinel() {
     setIsAuditing(false);
 
     // Auto-clear result after 8 seconds
-    setTimeout(() => setAuditResult(null), 8000);
+    auditClearTimerRef.current = setTimeout(() => setAuditResult(null), 8000);
   }, [isAuditing, statuses]);
 
   return (
@@ -1793,8 +1782,17 @@ function WebwrightTerminal() {
   const [isRunning, setIsRunning] = useState(false);
   const [outputLines, setOutputLines] = useState<string[]>([]);
   const terminalRef = useRef<HTMLDivElement>(null);
+  const timersRef = useRef<{ interval: NodeJS.Timeout | null; timeout: NodeJS.Timeout | null }>({ interval: null, timeout: null });
 
   const prevExecutions = mockWebwrightExecutions;
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (timersRef.current.interval) clearInterval(timersRef.current.interval);
+      if (timersRef.current.timeout) clearTimeout(timersRef.current.timeout);
+    };
+  }, []);
 
   const handleExecute = useCallback(() => {
     if (!prompt.trim() || isRunning) return;
@@ -1816,16 +1814,20 @@ function WebwrightTerminal() {
         idx++;
       } else {
         clearInterval(interval);
-        setTimeout(() => {
+        timersRef.current.interval = null;
+        const timeout = setTimeout(() => {
           setOutputLines((prev) => [
             ...prev,
             '[webwright] Status: SUCCESS',
             `[stdout] Task completed. Container MSCU${Math.floor(1000000 + Math.random() * 9000000)} is located in STACK_${String.fromCharCode(65 + Math.floor(Math.random() * 5))}, Row ${Math.floor(Math.random() * 10) + 1}.`,
           ]);
           setIsRunning(false);
+          timersRef.current.timeout = null;
         }, 600);
+        timersRef.current.timeout = timeout;
       }
     }, 500);
+    timersRef.current.interval = interval;
   }, [prompt, targetUrl, isRunning]);
 
   // Auto-scroll terminal
@@ -2091,7 +2093,7 @@ function SettingsView() {
     setCwTestLoading(true);
     setCwTestResult('idle');
     try {
-      await fetch('/api/cargowise/test', {
+      const res = await fetch('/api/cargowise/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2100,18 +2102,24 @@ function SettingsView() {
           credentials: { enterpriseId: cwEnterpriseId, companyCode: cwCompanyCode, serverId: cwServerId },
         }),
       });
+      if (!res.ok) {
+        setCwTestLoading(false);
+        setCwTestResult('error');
+        return;
+      }
+      setTimeout(() => {
+        setCwTestLoading(false);
+        setCwTestResult('success');
+      }, 3000);
     } catch {
-      /* demo – swallow */
-    }
-    setTimeout(() => {
       setCwTestLoading(false);
-      setCwTestResult('success');
-    }, 3000);
+      setCwTestResult('error');
+    }
   }, [cwEnterpriseId, cwCompanyCode, cwServerId, cwEadaptorUrl]);
 
   const handleSaveConnection = useCallback(async () => {
     try {
-      await fetch('/api/organisations/org_calthol', {
+      const res = await fetch('/api/organisations/org_calthol', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2121,15 +2129,19 @@ function SettingsView() {
           eadaptorUrl: cwEadaptorUrl,
         }),
       });
+      if (!res.ok) {
+        toast({ title: 'Save Failed', description: `Failed to save connection parameters (HTTP ${res.status}).`, variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Connection Parameters Saved', description: 'CargoWise eAdaptor configuration updated.' });
     } catch {
-      /* demo – swallow */
+      toast({ title: 'Save Failed', description: 'Network error while saving connection parameters.', variant: 'destructive' });
     }
-    toast({ title: 'Connection Parameters Saved', description: 'CargoWise eAdaptor configuration updated.' });
   }, [cwEnterpriseId, cwCompanyCode, cwServerId, cwEadaptorUrl]);
 
   const handleApplyThresholds = useCallback(async () => {
     try {
-      await fetch('/api/organisations/org_calthol', {
+      const res = await fetch('/api/organisations/org_calthol', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2137,10 +2149,14 @@ function SettingsView() {
           confidenceReviewRequired: quarantineThreshold,
         }),
       });
+      if (!res.ok) {
+        toast({ title: 'Apply Failed', description: `Failed to apply thresholds (HTTP ${res.status}).`, variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Thresholds Applied', description: `Auto-approve: ${autoApprove}% · Quarantine: ${quarantineThreshold}%` });
     } catch {
-      /* demo – swallow */
+      toast({ title: 'Apply Failed', description: 'Network error while applying thresholds.', variant: 'destructive' });
     }
-    toast({ title: 'Thresholds Applied', description: `Auto-approve: ${autoApprove}% · Quarantine: ${quarantineThreshold}%` });
   }, [autoApprove, quarantineThreshold]);
 
   const handleConnectEmail = useCallback(() => {
@@ -2162,17 +2178,21 @@ function SettingsView() {
       da179SugarTax: { enabled: mod6 },
     };
     try {
-      await fetch('/api/organisations/org_calthol', {
+      const res = await fetch('/api/organisations/org_calthol', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           settings: JSON.stringify({ complianceModules }),
         }),
       });
+      if (!res.ok) {
+        toast({ title: 'Save Failed', description: `Failed to save shield configuration (HTTP ${res.status}).`, variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Compliance Shield Enforced', description: 'All module configurations have been saved and are now active.' });
     } catch {
-      /* demo – swallow */
+      toast({ title: 'Save Failed', description: 'Network error while saving shield configuration.', variant: 'destructive' });
     }
-    toast({ title: 'Compliance Shield Enforced', description: 'All module configurations have been saved and are now active.' });
   }, [mod1, mod1Weight, mod2, mod3, mod3VatPct, mod4, mod4SarsUser, mod5, mod6]);
 
   return (

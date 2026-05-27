@@ -8,6 +8,7 @@ import { extractFromDocument } from "@/lib/ai-extraction";
 import { generateReference } from "@/lib/reference-generator";
 import { runComplianceShield, ComplianceModule } from "@/lib/compliance-engine";
 import type { DocumentType, ExtractionResult } from "@/lib/prompts";
+import { portToCountryCode, estimateZarValue } from '@/lib/api-utils';
 
 interface EmailAttachment {
   filename: string;
@@ -22,17 +23,6 @@ interface IngestEmailBody {
   bodyPreview?: string;
   classification?: "freight" | "non_freight" | "unknown";
   attachments: EmailAttachment[];
-}
-
-function portToCountryCode(port: string | null): string {
-  if (!port) return "";
-  return port.substring(0, 2).toUpperCase();
-}
-
-function estimateZarValue(valueUsd: number | null, currency: string | null): number {
-  if (!valueUsd) return 0;
-  const rate = currency === "GBP" ? 23.5 : currency === "EUR" ? 20.0 : 18.5;
-  return Math.round(valueUsd * rate * 100) / 100;
 }
 
 export async function POST(request: NextRequest) {
@@ -416,11 +406,11 @@ export async function POST(request: NextRequest) {
       shipmentId,
     });
   } catch (error) {
-    console.error("Error in email ingestion:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         error: "internal_error",
-        message: error instanceof Error ? error.message : "Email ingestion failed",
+        message: "Failed to ingest email",
       },
       { status: 500 }
     );

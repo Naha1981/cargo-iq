@@ -261,11 +261,11 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[CW Execute] Error:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         error: "Internal server error",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: "Failed to execute CargoWise operation",
       },
       { status: 500 }
     );

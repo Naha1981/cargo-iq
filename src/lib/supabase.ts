@@ -5,10 +5,16 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://daayivphhckietqlycau.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhYXlpdnBoaGNraWV0cWx5Y2F1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDQ1NDIsImV4cCI6MjA5NTMyMDU0Mn0.8iSP2y9JjjsN5qXkxB2cvHGrJNdgUEFynTmw1ZWDixM';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.warn('[CargoIQ] Supabase environment variables not set. Auth features will be disabled.');
+}
+
+export const supabase = SUPABASE_URL && SUPABASE_ANON_KEY 
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
 
 export interface AuthUser {
   id: string;
@@ -23,6 +29,7 @@ export interface AuthUser {
  * Returns null if the token is invalid or expired.
  */
 export async function verifySupabaseToken(token: string): Promise<AuthUser | null> {
+  if (!supabase) return null;
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {

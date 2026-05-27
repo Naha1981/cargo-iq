@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateReference } from "@/lib/reference-generator";
 import { runComplianceShield, ComplianceModule } from "@/lib/compliance-engine";
+import { portToCountryCode, estimateZarValue, safeJsonParse } from '@/lib/api-utils';
 
 interface ExtractedLineItem {
   hsCode?: string | null;
@@ -50,17 +51,6 @@ interface CreateFromExtractionBody {
   overallConfidence?: string;
   extractionNotes?: string;
   lineItems?: ExtractedLineItem[];
-}
-
-function portToCountryCode(port: string | null): string {
-  if (!port) return "";
-  return port.substring(0, 2).toUpperCase();
-}
-
-function estimateZarValue(valueUsd: number | null, currency: string | null): number {
-  if (!valueUsd) return 0;
-  const rate = currency === "GBP" ? 23.5 : currency === "EUR" ? 20.0 : 18.5;
-  return Math.round(valueUsd * rate * 100) / 100;
 }
 
 export async function POST(request: NextRequest) {
@@ -287,19 +277,19 @@ export async function POST(request: NextRequest) {
         status: fullShipment!.status,
         shieldStatus: fullShipment!.shieldStatus,
         overallConfidence: fullShipment!.overallConfidence,
-        extractedFields: JSON.parse(fullShipment!.extractedFields || "{}"),
-        shieldResults: JSON.parse(fullShipment!.shieldResults || "{}"),
+        extractedFields: safeJsonParse<Record<string, unknown>>(fullShipment!.extractedFields, {}),
+        shieldResults: safeJsonParse<Record<string, unknown>>(fullShipment!.shieldResults, {}),
         lineItems: fullShipment!.lineItems,
         complianceEvents: fullShipment!.complianceEvents,
         createdAt: fullShipment!.createdAt.toISOString(),
       },
     });
   } catch (error) {
-    console.error("Error creating shipment from extraction:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         error: "internal_error",
-        message: error instanceof Error ? error.message : "Failed to create shipment",
+        message: "Failed to create shipment",
       },
       { status: 500 }
     );

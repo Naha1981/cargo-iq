@@ -232,12 +232,12 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error in AI extraction:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json(
       {
         success: false,
         error: "internal_error",
-        message: error instanceof Error ? error.message : "Failed to extract data",
+        message: "Failed to extract document data",
         extracted: defaultExtraction(),
       },
       { status: 500 }
