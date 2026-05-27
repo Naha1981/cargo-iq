@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
 
     // Create shipment
     const fieldValue = (key: string): string | number | null => {
-      const field = extractionResult![key as keyof typeof extractionResult!];
+      const field = extractionResult[key as keyof typeof extractionResult];
       if (field && typeof field === "object" && "value" in field) {
         return (field as { value: string | number | null }).value ?? null;
       }
