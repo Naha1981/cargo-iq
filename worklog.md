@@ -548,3 +548,33 @@ Stage Summary:
 - All SA-specific terminology and ZAR formatting implemented
 - Webwright terminal simulates execution with animated output
 - Confidence color coding: green (high ≥85%), amber (medium 65-85%), orange (low <65%)
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix non-responsive CargoFlow AI buttons and build complete Settings page
+
+Work Log:
+- Analyzed the full codebase structure (2695-line monolithic SPA in page.tsx)
+- Identified 3 non-functional buttons in CargoFlowView: Upload Document, Release to CargoWise, Reject File
+- Fixed Upload Document: Added hidden file input ref, FormData upload to /api/ai/extract, loading state, toast notifications
+- Fixed Release to CargoWise: Added 2-click confirmation (3s timeout), calls POST /api/shipments/[id]/approve, handles hold/acknowledgeRisks, updates local state
+- Fixed Reject File: Added inline rejection form with reason input (min 3 chars), calls POST /api/shipments/[id]/reject, auto-selects next shipment
+- Added Loader2 spinner animation for all async operations
+- Added toast import from @/hooks/use-toast and Toaster component to main app
+- Completely rewrote SettingsView with left sub-nav + right form layout (Deep Navy #0B1F2A + Muted Orange #FF7A1A)
+- Tab 1: CargoWise eAdaptor - 4 input fields, Test Connection with amber loading bar + green success badge, Save Connection Parameters
+- Tab 2: AI Confidence Thresholds - Two styled range sliders (Auto-Approve 95%, Quarantine 75%), Apply Thresholds button
+- Tab 3: Ingestion Channels - Email (IMAP/Gmail/Outlook dropdown, host, port, user, password) + WhatsApp Evolution API (server URL, API key, QR code simulation, connected badge)
+- Tab 4: Compliance Shield Rules - 6 modules with toggle switches, conditional parameter inputs (weight tolerance, VAT %, SARS username), Save & Enforce Shield
+- Added SettingsToggleSwitch component extracted as separate function to avoid render-time component creation
+- Added custom CSS for range sliders (.ciq-slider) and toggle switches (.ciq-toggle) in globals.css
+- Fixed Settings view layout to use overflow-hidden container for proper full-height rendering
+- All API calls use correct endpoints: PATCH /api/organisations/org_calthol, POST /api/cargowise/test
+- Zero lint errors in src/ files, dev server compiles successfully
+
+Stage Summary:
+- All 3 CargoFlow AI buttons now fully functional with API calls, loading states, and toast notifications
+- Complete Settings page with 4 sub-tabs matching the detailed specification
+- Custom styled sliders and toggle switches for government-portal aesthetic
+- File: /home/z/my-project/src/app/page.tsx (2699 lines), /home/z/my-project/src/app/globals.css (860+ lines)

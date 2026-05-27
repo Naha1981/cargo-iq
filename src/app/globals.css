@@ -747,6 +747,96 @@
    Utility: Print styles
    ────────────────────────────────────────────── */
 
+/* ──────────────────────────────────────────────
+   Component: Range Slider (Settings thresholds)
+   ────────────────────────────────────────────── */
+
+input[type="range"].ciq-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"].ciq-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 3px solid var(--ciq-accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+input[type="range"].ciq-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+input[type="range"].ciq-slider::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+}
+
+input[type="range"].ciq-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 3px solid var(--ciq-accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+input[type="range"].ciq-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* ──────────────────────────────────────────────
+   Component: Settings Toggle Switch
+   ────────────────────────────────────────────── */
+
+.ciq-toggle {
+  position: relative;
+  display: inline-flex;
+  height: 22px;
+  width: 44px;
+  flex-shrink: 0;
+  cursor: pointer;
+  align-items: center;
+  border-radius: 11px;
+  transition: background-color 200ms ease;
+  border: none;
+  padding: 0;
+}
+
+.ciq-toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 200ms ease;
+}
+
+.ciq-toggle[aria-checked="true"]::after {
+  transform: translateX(22px);
+}
+
+/* ──────────────────────────────────────────────
+   Utility: Print styles
+   ────────────────────────────────────────────── */
+
 @media print {
   .ciq-sidebar,
   .ciq-topnav {

@@ -40,6 +40,11 @@ import {
   ExternalLink,
   Package,
   Globe,
+  Loader2,
+  Wifi,
+  QrCode,
+  Server,
+  Sliders,
 } from 'lucide-react';
 import {
   mockShipments,
@@ -59,6 +64,8 @@ import type {
   RlaStatus,
   WebwrightExecution,
 } from '@/lib/types';
+import { toast } from '@/hooks/use-toast';
+import { Toaster } from '@/components/ui/toaster';
 
 /* ══════════════════════════════════════════════════════════════════════
    DESIGN TOKENS
@@ -1153,9 +1160,8 @@ function SARSPenaltyShieldBanner({ shipment }: { shipment: ShipmentDetail | null
 }
 
 function CargoFlowView() {
-  const quarantinedShipments = useMemo(
-    () => mockShipments.filter((s) => s.status === 'review_required' || s.status === 'pending'),
-    []
+  const [quarantinedShipments, setQuarantinedShipments] = useState<ShipmentSummary[]>(() =>
+    mockShipments.filter((s) => s.status === 'review_required' || s.status === 'pending')
   );
 
   const [selectedId, setSelectedId] = useState<string | null>(() =>
@@ -1165,13 +1171,206 @@ function CargoFlowView() {
     quarantinedShipments.length > 0 ? getMockShipmentDetail(quarantinedShipments[0].id) : null
   );
 
+  // Upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Release confirmation state
+  const [releaseConfirm, setReleaseConfirm] = useState(false);
+  const [isReleasing, setIsReleasing] = useState(false);
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reject state
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
+
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
     setDetail(getMockShipmentDetail(id));
+    // Reset states when selecting a different shipment
+    setReleaseConfirm(false);
+    setShowRejectForm(false);
+    setRejectReason('');
+  }, []);
+
+  // ── Upload Document ──────────────────────────────────────────────────
+  const handleUploadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/ai/extract', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ message: 'Upload failed' }));
+        throw new Error(errData.message || 'Upload failed');
+      }
+
+      toast({
+        title: 'Document uploaded',
+        description: 'Document uploaded and extraction started',
+      });
+    } catch (err) {
+      toast({
+        title: 'Upload failed',
+        description: err instanceof Error ? err.message : 'Failed to upload document',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+      // Reset file input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, []);
+
+  // ── Release to CargoWise ─────────────────────────────────────────────
+  const handleReleaseClick = useCallback(() => {
+    if (!selectedId) return;
+
+    if (!releaseConfirm) {
+      // First click: enter confirmation mode
+      setReleaseConfirm(true);
+      // Auto-revert after 3 seconds
+      releaseTimerRef.current = setTimeout(() => {
+        setReleaseConfirm(false);
+      }, 3000);
+      return;
+    }
+
+    // Second click during confirmation window: execute release
+    if (releaseTimerRef.current) {
+      clearTimeout(releaseTimerRef.current);
+      releaseTimerRef.current = null;
+    }
+
+    setIsReleasing(true);
+    const shieldStatus = detail?.shieldResults?.overall;
+    const body: Record<string, unknown> = {};
+    if (shieldStatus === 'hold') {
+      body.acknowledgeRisks = true;
+    }
+
+    fetch(`/api/shipments/${selectedId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ message: 'Release failed' }));
+          throw new Error(errData.message || 'Release failed');
+        }
+        toast({
+          title: 'Released to CargoWise',
+          description: 'Released to CargoWise as draft',
+        });
+        // Update local state
+        setQuarantinedShipments((prev) => prev.filter((s) => s.id !== selectedId));
+        setDetail((prev) =>
+          prev ? { ...prev, status: 'cw_draft_created' } : null
+        );
+      })
+      .catch((err) => {
+        toast({
+          title: 'Release failed',
+          description: err instanceof Error ? err.message : 'Failed to release to CargoWise',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => {
+        setIsReleasing(false);
+        setReleaseConfirm(false);
+      });
+  }, [selectedId, releaseConfirm, detail]);
+
+  // ── Reject File ──────────────────────────────────────────────────────
+  const handleRejectClick = useCallback(() => {
+    setShowRejectForm(true);
+    setRejectReason('');
+  }, []);
+
+  const handleRejectCancel = useCallback(() => {
+    setShowRejectForm(false);
+    setRejectReason('');
+  }, []);
+
+  const handleRejectSubmit = useCallback(() => {
+    if (!selectedId || rejectReason.trim().length < 3) return;
+
+    setIsRejecting(true);
+    fetch(`/api/shipments/${selectedId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: rejectReason.trim() }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ message: 'Rejection failed' }));
+          throw new Error(errData.message || 'Rejection failed');
+        }
+        toast({
+          title: 'Shipment rejected',
+          description: 'Shipment has been rejected',
+        });
+        // Remove from quarantine queue
+        setQuarantinedShipments((prev) => {
+          const updated = prev.filter((s) => s.id !== selectedId);
+          // Auto-select the next shipment if available
+          if (updated.length > 0) {
+            const nextId = updated[0].id;
+            setSelectedId(nextId);
+            setDetail(getMockShipmentDetail(nextId));
+          } else {
+            setSelectedId(null);
+            setDetail(null);
+          }
+          return updated;
+        });
+        setShowRejectForm(false);
+        setRejectReason('');
+      })
+      .catch((err) => {
+        toast({
+          title: 'Rejection failed',
+          description: err instanceof Error ? err.message : 'Failed to reject shipment',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => {
+        setIsRejecting(false);
+      });
+  }, [selectedId, rejectReason]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+    };
   }, []);
 
   return (
     <div className="flex h-full">
+      {/* Hidden file input for upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+
       {/* Quarantine Queue */}
       <QuarantineQueue
         shipments={quarantinedShipments}
@@ -1201,13 +1400,15 @@ function CargoFlowView() {
             </span>
           </div>
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors"
+            onClick={handleUploadClick}
+            disabled={isUploading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors disabled:opacity-60"
             style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+            onMouseEnter={(e) => { if (!isUploading) e.currentTarget.style.backgroundColor = COLORS.orangeHover; }}
+            onMouseLeave={(e) => { if (!isUploading) e.currentTarget.style.backgroundColor = COLORS.orange; }}
           >
-            <Upload size={14} />
-            Upload Document
+            {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            {isUploading ? 'Uploading…' : 'Upload Document'}
           </button>
         </div>
 
@@ -1230,6 +1431,56 @@ function CargoFlowView() {
         {/* SARS Penalty Shield Banner */}
         <SARSPenaltyShieldBanner shipment={detail} />
 
+        {/* Reject Reason Form (inline, above action buttons) */}
+        {showRejectForm && (
+          <div
+            className="px-4 py-3 shrink-0"
+            style={{
+              backgroundColor: COLORS.errorBg,
+              borderTop: `1px solid ${COLORS.error}`,
+            }}
+          >
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: COLORS.errorDark }}>
+              Reason for rejection
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && rejectReason.trim().length >= 3) handleRejectSubmit();
+                  if (e.key === 'Escape') handleRejectCancel();
+                }}
+                placeholder="Enter rejection reason (min 3 characters)…"
+                autoFocus
+                className="flex-1 px-3 py-1.5 text-[13px] rounded-md border outline-none"
+                style={{
+                  borderColor: COLORS.error,
+                  backgroundColor: COLORS.surface,
+                  color: COLORS.textPrimaryLight,
+                }}
+              />
+              <button
+                onClick={handleRejectSubmit}
+                disabled={isRejecting || rejectReason.trim().length < 3}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors disabled:opacity-50"
+                style={{ backgroundColor: COLORS.error, color: '#FFF' }}
+              >
+                {isRejecting ? <Loader2 size={13} className="animate-spin" /> : <Ban size={13} />}
+                Submit Rejection
+              </button>
+              <button
+                onClick={handleRejectCancel}
+                className="px-3 py-1.5 rounded-md text-[12px] font-semibold border transition-colors"
+                style={{ borderColor: COLORS.borderLight, color: COLORS.textTertiary, backgroundColor: 'transparent' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div
           className="flex items-center justify-end gap-3 px-4 py-3 shrink-0"
@@ -1239,22 +1490,37 @@ function CargoFlowView() {
           }}
         >
           <button
-            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold border transition-colors"
+            onClick={handleRejectClick}
+            disabled={showRejectForm || isRejecting}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold border transition-colors disabled:opacity-50"
             style={{ borderColor: COLORS.error, color: COLORS.error, backgroundColor: 'transparent' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.errorBg)}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            onMouseEnter={(e) => { if (!showRejectForm) e.currentTarget.style.backgroundColor = COLORS.errorBg; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
             <Ban size={15} />
             Reject File
           </button>
           <button
-            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
-            style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+            onClick={handleReleaseClick}
+            disabled={isReleasing || !selectedId}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors disabled:opacity-50"
+            style={{
+              backgroundColor: releaseConfirm ? COLORS.success : COLORS.orange,
+              color: '#FFF',
+            }}
+            onMouseEnter={(e) => {
+              if (!isReleasing) e.currentTarget.style.backgroundColor = releaseConfirm ? '#059669' : COLORS.orangeHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = releaseConfirm ? COLORS.success : COLORS.orange;
+            }}
           >
-            <ExternalLink size={15} />
-            Release to CargoWise
+            {isReleasing ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <ExternalLink size={15} />
+            )}
+            {isReleasing ? 'Releasing…' : releaseConfirm ? 'Confirm Release?' : 'Release to CargoWise'}
           </button>
         </div>
       </div>
@@ -1637,225 +1903,719 @@ function WiseLayerView() {
    SETTINGS VIEW
    ══════════════════════════════════════════════════════════════════════ */
 
-function SettingsView() {
-  const [activeTab, setActiveTab] = useState<'general' | 'api' | 'agents' | 'notifications'>('general');
+function SettingsToggleSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full transition-colors"
+      style={{ backgroundColor: on ? COLORS.success : COLORS.borderLight }}
+    >
+      <span
+        className="inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+        style={{ transform: on ? 'translateX(22px)' : 'translateX(2px)' }}
+      />
+    </button>
+  );
+}
 
-  const tabs = [
-    { key: 'general' as const, label: 'General', icon: Settings },
-    { key: 'api' as const, label: 'API Keys', icon: Globe },
-    { key: 'agents' as const, label: 'Agent Config', icon: Activity },
-    { key: 'notifications' as const, label: 'Notifications', icon: Bell },
+function SettingsView() {
+  const [activeTab, setActiveTab] = useState<'cargowise' | 'thresholds' | 'ingestion' | 'compliance'>('cargowise');
+
+  // ── Tab 1: CargoWise eAdaptor state ──
+  const [cwEnterpriseId, setCwEnterpriseId] = useState('CIQ');
+  const [cwCompanyCode, setCwCompanyCode] = useState('ZAR');
+  const [cwServerId, setCwServerId] = useState('ZAR_PROD');
+  const [cwEadaptorUrl, setCwEadaptorUrl] = useState('https://zar.prod.wisetech.com/xml');
+  const [cwTestLoading, setCwTestLoading] = useState(false);
+  const [cwTestResult, setCwTestResult] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // ── Tab 2: AI Confidence Thresholds state ──
+  const [autoApprove, setAutoApprove] = useState(95);
+  const [quarantineThreshold, setQuarantineThreshold] = useState(75);
+
+  // ── Tab 3: Ingestion Channels state ──
+  const [emailConnType, setEmailConnType] = useState<'IMAP' | 'Gmail' | 'Outlook'>('IMAP');
+  const [imapHost, setImapHost] = useState('imap.calthol.co.za');
+  const [imapPort, setImapPort] = useState('993');
+  const [emailUser, setEmailUser] = useState('docs@calthol.co.za');
+  const [emailPass, setEmailPass] = useState('');
+  const [evoServerUrl, setEvoServerUrl] = useState('https://evo.calthol.co.za');
+  const [evoApiKey, setEvoApiKey] = useState('');
+  const [waStep, setWaStep] = useState<'idle' | 'qr' | 'connected'>('idle');
+
+  // ── Tab 4: Compliance Shield state ──
+  const [mod1, setMod1] = useState(true);
+  const [mod1Weight, setMod1Weight] = useState('1.0');
+  const [mod2, setMod2] = useState(true);
+  const [mod3, setMod3] = useState(true);
+  const [mod3VatPct, setMod3VatPct] = useState('15');
+  const [mod4, setMod4] = useState(true);
+  const [mod4SarsUser, setMod4SarsUser] = useState('ZAR_Decl_01');
+  const [mod5, setMod5] = useState(true);
+  const [mod6, setMod6] = useState(true);
+
+  const subNavItems = [
+    { key: 'cargowise' as const, label: 'CargoWise eAdaptor', icon: Server },
+    { key: 'thresholds' as const, label: 'AI Confidence', icon: Sliders },
+    { key: 'ingestion' as const, label: 'Ingestion Channels', icon: Wifi },
+    { key: 'compliance' as const, label: 'Compliance Shield', icon: Shield },
   ];
 
-  return (
-    <div className="p-6 max-w-[900px]">
-      <h3 className="text-[18px] font-semibold mb-4" style={{ color: COLORS.textPrimaryLight }}>
-        Settings
-      </h3>
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 12px',
+    fontSize: 13,
+    borderRadius: 6,
+    border: `1px solid ${COLORS.borderLight}`,
+    backgroundColor: COLORS.canvas,
+    color: COLORS.textPrimaryLight,
+    outline: 'none',
+    fontFamily: 'var(--font-geist-mono), monospace',
+  };
 
-      {/* Tab Bar */}
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.05em',
+    color: COLORS.textTertiary,
+    marginBottom: 6,
+    display: 'block',
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    fontSize: 13,
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em',
+    color: COLORS.textPrimaryLight,
+    marginBottom: 16,
+    paddingBottom: 10,
+    borderBottom: `1px solid ${COLORS.borderSubtle}`,
+  };
+
+  /* ── handlers ── */
+  const handleTestConnection = useCallback(async () => {
+    setCwTestLoading(true);
+    setCwTestResult('idle');
+    try {
+      await fetch('/api/cargowise/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orgId: 'org_calthol',
+          serverUrl: cwEadaptorUrl,
+          credentials: { enterpriseId: cwEnterpriseId, companyCode: cwCompanyCode, serverId: cwServerId },
+        }),
+      });
+    } catch {
+      /* demo – swallow */
+    }
+    setTimeout(() => {
+      setCwTestLoading(false);
+      setCwTestResult('success');
+    }, 3000);
+  }, [cwEnterpriseId, cwCompanyCode, cwServerId, cwEadaptorUrl]);
+
+  const handleSaveConnection = useCallback(async () => {
+    try {
+      await fetch('/api/organisations/org_calthol', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enterpriseId: cwEnterpriseId,
+          companyCode: cwCompanyCode,
+          serverId: cwServerId,
+          eadaptorUrl: cwEadaptorUrl,
+        }),
+      });
+    } catch {
+      /* demo – swallow */
+    }
+    toast({ title: 'Connection Parameters Saved', description: 'CargoWise eAdaptor configuration updated.' });
+  }, [cwEnterpriseId, cwCompanyCode, cwServerId, cwEadaptorUrl]);
+
+  const handleApplyThresholds = useCallback(async () => {
+    try {
+      await fetch('/api/organisations/org_calthol', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confidenceAutoApprove: autoApprove,
+          confidenceReviewRequired: quarantineThreshold,
+        }),
+      });
+    } catch {
+      /* demo – swallow */
+    }
+    toast({ title: 'Thresholds Applied', description: `Auto-approve: ${autoApprove}% · Quarantine: ${quarantineThreshold}%` });
+  }, [autoApprove, quarantineThreshold]);
+
+  const handleConnectEmail = useCallback(() => {
+    toast({ title: 'Email Ingestion Connected', description: `${emailConnType} connection to ${imapHost}:${imapPort} established.` });
+  }, [emailConnType, imapHost, imapPort]);
+
+  const handleProvisionWhatsApp = useCallback(() => {
+    setWaStep('qr');
+    setTimeout(() => setWaStep('connected'), 5000);
+  }, []);
+
+  const handleSaveShield = useCallback(async () => {
+    const complianceModules = {
+      invoicePlCrossRef: { enabled: mod1, weightTolerance: mod1Weight },
+      hsCodeFormat: { enabled: mod2 },
+      sacuVatEngine: { enabled: mod3, vatPercentage: mod3VatPct },
+      rlaEfiling: { enabled: mod4, sarsUsername: mod4SarsUser },
+      da65Export: { enabled: mod5 },
+      da179SugarTax: { enabled: mod6 },
+    };
+    try {
+      await fetch('/api/organisations/org_calthol', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: JSON.stringify({ complianceModules }),
+        }),
+      });
+    } catch {
+      /* demo – swallow */
+    }
+    toast({ title: 'Compliance Shield Enforced', description: 'All module configurations have been saved and are now active.' });
+  }, [mod1, mod1Weight, mod2, mod3, mod3VatPct, mod4, mod4SarsUser, mod5, mod6]);
+
+  return (
+    <div className="flex h-full">
+      {/* ── Left Sub-Nav ── */}
       <div
-        className="flex gap-1 mb-6 p-1 rounded-lg"
-        style={{ backgroundColor: COLORS.canvas }}
+        className="shrink-0 flex flex-col h-full"
+        style={{
+          width: 220,
+          backgroundColor: COLORS.navy,
+          borderRight: `1px solid ${COLORS.navyBorder}`,
+        }}
       >
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors flex-1 justify-center"
-              style={{
-                backgroundColor: active ? COLORS.surface : 'transparent',
-                color: active ? COLORS.textPrimaryLight : COLORS.textTertiary,
-                boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-              }}
-            >
-              <Icon size={15} />
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          );
-        })}
+        <div
+          className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest"
+          style={{ color: COLORS.textSecondaryDark, borderBottom: `1px solid ${COLORS.navyBorder}` }}
+        >
+          System Configuration
+        </div>
+        <nav className="flex-1 py-2">
+          {subNavItems.map((item) => {
+            const active = activeTab === item.key;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.key}
+                onClick={() => setActiveTab(item.key)}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors text-left"
+                style={{
+                  color: active ? COLORS.textPrimaryDark : COLORS.textSecondaryDark,
+                  backgroundColor: active ? COLORS.navyLight : 'transparent',
+                  borderLeft: active ? `3px solid ${COLORS.orange}` : '3px solid transparent',
+                  fontWeight: active ? 600 : 500,
+                }}
+              >
+                <Icon size={16} />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Tab Content */}
-      <div className="rounded-lg border p-6" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.borderLight }}>
-        {activeTab === 'general' && (
-          <div className="space-y-5">
-            <div>
-              <label className="text-[12px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: COLORS.textTertiary }}>
-                Organisation Name
-              </label>
-              <input
-                defaultValue="Calthol CC — Customs Division"
-                className="w-full px-3 py-2 text-[13px] rounded-md border outline-none"
-                style={{ borderColor: COLORS.borderLight, color: COLORS.textPrimaryLight, backgroundColor: COLORS.canvas }}
-              />
-            </div>
-            <div>
-              <label className="text-[12px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: COLORS.textTertiary }}>
-                SARS Declarant Code
-              </label>
-              <input
-                defaultValue="50123456789"
-                className="w-full px-3 py-2 text-[13px] font-mono rounded-md border outline-none"
-                style={{ borderColor: COLORS.borderLight, color: COLORS.textPrimaryLight, backgroundColor: COLORS.canvas }}
-              />
-            </div>
-            <div>
-              <label className="text-[12px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: COLORS.textTertiary }}>
-                Default Port
-              </label>
-              <select
-                defaultValue="ZADUR"
-                className="w-full px-3 py-2 text-[13px] rounded-md border outline-none"
-                style={{ borderColor: COLORS.borderLight, color: COLORS.textPrimaryLight, backgroundColor: COLORS.canvas }}
-              >
-                <option value="ZADUR">ZADUR — Durban</option>
-                <option value="ZACPT">ZACPT — Cape Town</option>
-                <option value="ZAJNB">ZAJNB — Johannesburg</option>
-              </select>
-            </div>
-            <div className="flex items-center justify-between">
+      {/* ── Right Content Panel ── */}
+      <div
+        className="flex-1 p-6 overflow-y-auto h-full"
+        style={{
+          backgroundColor: COLORS.surface,
+          scrollbarWidth: 'thin',
+          scrollbarColor: `${COLORS.borderLight} transparent`,
+        }}
+      >
+        {/* ═══════ Tab 1: CargoWise eAdaptor ═══════ */}
+        {activeTab === 'cargowise' && (
+          <div className="max-w-2xl">
+            <div style={sectionHeaderStyle}>CargoWise eAdaptor Integration</div>
+
+            <div className="space-y-4 mb-6">
               <div>
-                <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
-                  Auto-Release High Confidence
-                </div>
-                <div className="text-[11px]" style={{ color: COLORS.textTertiary }}>
-                  Automatically release shipments with &gt;95% confidence
-                </div>
+                <label style={labelStyle}>Enterprise ID</label>
+                <input
+                  value={cwEnterpriseId}
+                  onChange={(e) => setCwEnterpriseId(e.target.value)}
+                  style={inputStyle}
+                />
               </div>
-              <div
-                className="w-10 h-5 rounded-full relative cursor-pointer"
-                style={{ backgroundColor: COLORS.success }}
-              >
-                <div
-                  className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
-                  style={{ left: 22 }}
+              <div>
+                <label style={labelStyle}>Company Code</label>
+                <input
+                  value={cwCompanyCode}
+                  onChange={(e) => setCwCompanyCode(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Server ID</label>
+                <input
+                  value={cwServerId}
+                  onChange={(e) => setCwServerId(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>eAdaptor URL</label>
+                <input
+                  value={cwEadaptorUrl}
+                  onChange={(e) => setCwEadaptorUrl(e.target.value)}
+                  style={inputStyle}
                 />
               </div>
             </div>
-            <button
-              className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
-              style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
-            >
-              Save Changes
-            </button>
+
+            {/* Connection Test Result */}
+            {cwTestLoading && (
+              <div className="mb-4">
+                <div
+                  className="h-1.5 rounded-full overflow-hidden"
+                  style={{ backgroundColor: COLORS.surfaceSubtle }}
+                >
+                  <div
+                    className="h-full rounded-full animate-pulse"
+                    style={{ width: '100%', backgroundColor: COLORS.orange }}
+                  />
+                </div>
+                <div className="text-[11px] mt-1" style={{ color: COLORS.textTertiary }}>
+                  Testing connection…
+                </div>
+              </div>
+            )}
+            {cwTestResult === 'success' && !cwTestLoading && (
+              <div
+                className="mb-4 flex items-center gap-2 px-3 py-2 rounded-md text-[12px] font-semibold"
+                style={{ backgroundColor: COLORS.successBg, color: COLORS.successDark, border: `1px solid ${COLORS.success}` }}
+              >
+                <CheckCircle2 size={14} />
+                CONNECTION SECURE: eAdaptor Port Operational
+              </div>
+            )}
+            {cwTestResult === 'error' && !cwTestLoading && (
+              <div
+                className="mb-4 flex items-center gap-2 px-3 py-2 rounded-md text-[12px] font-semibold"
+                style={{ backgroundColor: COLORS.errorBg, color: COLORS.errorDark, border: `1px solid ${COLORS.error}` }}
+              >
+                <XCircle size={14} />
+                CONNECTION FAILED: Unable to reach eAdaptor endpoint
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2" style={{ borderTop: `1px solid ${COLORS.borderSubtle}` }}>
+              <button
+                onClick={handleTestConnection}
+                disabled={cwTestLoading}
+                className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+                style={{
+                  backgroundColor: COLORS.surfaceSubtle,
+                  color: COLORS.textPrimaryLight,
+                  border: `1px solid ${COLORS.borderLight}`,
+                  opacity: cwTestLoading ? 0.6 : 1,
+                }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Wifi size={14} />
+                  Test Connection
+                </span>
+              </button>
+              <button
+                onClick={handleSaveConnection}
+                className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+                style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Check size={14} />
+                  Save Connection Parameters
+                </span>
+              </button>
+            </div>
           </div>
         )}
 
-        {activeTab === 'api' && (
-          <div className="space-y-4">
-            {[
-              { name: 'CargoWise API Key', value: 'cw_prod_****7a3f', connected: true },
-              { name: 'SARS eFiling Token', value: 'sars_ef_****2b1c', connected: true },
-              { name: 'OpenAI API Key', value: 'sk-****d8e9', connected: true },
-              { name: 'WhatsApp Business API', value: 'Not configured', connected: false },
-            ].map((api) => (
-              <div
-                key={api.name}
-                className="flex items-center justify-between p-3 rounded-lg border"
-                style={{ borderColor: COLORS.borderSubtle, backgroundColor: COLORS.canvas }}
+        {/* ═══════ Tab 2: AI Confidence Thresholds ═══════ */}
+        {activeTab === 'thresholds' && (
+          <div className="max-w-2xl">
+            <div style={sectionHeaderStyle}>AI Confidence Guardrails</div>
+
+            <div className="space-y-8 mb-6">
+              {/* Auto-Approve Slider */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>Auto-Approve Threshold</label>
+                  <span
+                    className="text-[16px] font-bold tabular-nums"
+                    style={{ color: COLORS.success }}
+                  >
+                    {autoApprove}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={50}
+                  max={100}
+                  value={autoApprove}
+                  onChange={(e) => setAutoApprove(Number(e.target.value))}
+                  className="ciq-slider w-full"
+                  style={{
+                    background: `linear-gradient(to right, ${COLORS.success} 0%, ${COLORS.success} ${((autoApprove - 50) / 50) * 100}%, ${COLORS.surfaceSubtle} ${((autoApprove - 50) / 50) * 100}%, ${COLORS.surfaceSubtle} 100%)`,
+                  }}
+                />
+                <div className="text-[11px] mt-1" style={{ color: COLORS.textTertiary }}>
+                  Documents above this confidence bypass quarantine
+                </div>
+              </div>
+
+              {/* Quarantine Slider */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>Quarantine Threshold</label>
+                  <span
+                    className="text-[16px] font-bold tabular-nums"
+                    style={{ color: COLORS.orange }}
+                  >
+                    {quarantineThreshold}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={50}
+                  max={100}
+                  value={quarantineThreshold}
+                  onChange={(e) => setQuarantineThreshold(Number(e.target.value))}
+                  className="ciq-slider w-full"
+                  style={{
+                    background: `linear-gradient(to right, ${COLORS.orange} 0%, ${COLORS.orange} ${((quarantineThreshold - 50) / 50) * 100}%, ${COLORS.surfaceSubtle} ${((quarantineThreshold - 50) / 50) * 100}%, ${COLORS.surfaceSubtle} 100%)`,
+                  }}
+                />
+                <div className="text-[11px] mt-1" style={{ color: COLORS.textTertiary }}>
+                  Documents below this require manual review
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4" style={{ borderTop: `1px solid ${COLORS.borderSubtle}` }}>
+              <button
+                onClick={handleApplyThresholds}
+                className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+                style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
               >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: api.connected ? COLORS.success : COLORS.textTertiary }}
-                  />
+                <span className="flex items-center gap-1.5">
+                  <Sliders size={14} />
+                  Apply Thresholds
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════ Tab 3: Ingestion Channels ═══════ */}
+        {activeTab === 'ingestion' && (
+          <div className="max-w-4xl">
+            <div style={sectionHeaderStyle}>Ingestion Channels</div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Email Ingestion */}
+              <div
+                className="rounded-lg p-5"
+                style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <Mail size={16} style={{ color: COLORS.orange }} />
+                  <span className="text-[13px] font-semibold" style={{ color: COLORS.textPrimaryLight }}>
+                    Email Ingestion
+                  </span>
+                </div>
+                <div className="space-y-3">
                   <div>
-                    <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
-                      {api.name}
-                    </div>
-                    <div className="text-[11px] font-mono" style={{ color: COLORS.textTertiary }}>
-                      {api.value}
-                    </div>
+                    <label style={labelStyle}>Connection Type</label>
+                    <select
+                      value={emailConnType}
+                      onChange={(e) => setEmailConnType(e.target.value as 'IMAP' | 'Gmail' | 'Outlook')}
+                      style={{ ...inputStyle, fontFamily: 'inherit' }}
+                    >
+                      <option value="IMAP">IMAP</option>
+                      <option value="Gmail">Gmail</option>
+                      <option value="Outlook">Outlook</option>
+                    </select>
                   </div>
+                  <div>
+                    <label style={labelStyle}>IMAP Host</label>
+                    <input value={imapHost} onChange={(e) => setImapHost(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Port</label>
+                    <input value={imapPort} onChange={(e) => setImapPort(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Username</label>
+                    <input value={emailUser} onChange={(e) => setEmailUser(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Password</label>
+                    <input
+                      type="password"
+                      value={emailPass}
+                      onChange={(e) => setEmailPass(e.target.value)}
+                      placeholder="••••••••"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <button
+                    onClick={handleConnectEmail}
+                    className="w-full px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+                    style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+                  >
+                    <span className="flex items-center justify-center gap-1.5">
+                      <Mail size={14} />
+                      Connect Email Ingest
+                    </span>
+                  </button>
                 </div>
-                <button
-                  className="text-[12px] font-medium px-2.5 py-1 rounded border transition-colors"
-                  style={{ borderColor: COLORS.borderLight, color: COLORS.textTertiary }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = COLORS.orange)}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = COLORS.borderLight)}
-                >
-                  {api.connected ? 'Update' : 'Configure'}
-                </button>
               </div>
-            ))}
+
+              {/* WhatsApp (Evolution API) */}
+              <div
+                className="rounded-lg p-5"
+                style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <MessageCircle size={16} style={{ color: COLORS.success }} />
+                  <span className="text-[13px] font-semibold" style={{ color: COLORS.textPrimaryLight }}>
+                    WhatsApp (Evolution API)
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label style={labelStyle}>Evolution API Server URL</label>
+                    <input value={evoServerUrl} onChange={(e) => setEvoServerUrl(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Evolution API Key</label>
+                    <input
+                      type="password"
+                      value={evoApiKey}
+                      onChange={(e) => setEvoApiKey(e.target.value)}
+                      placeholder="••••••••"
+                      style={inputStyle}
+                    />
+                  </div>
+                  {waStep === 'idle' && (
+                    <button
+                      onClick={handleProvisionWhatsApp}
+                      className="w-full px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+                      style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+                    >
+                      <span className="flex items-center justify-center gap-1.5">
+                        <QrCode size={14} />
+                        Provision WhatsApp Instance
+                      </span>
+                    </button>
+                  )}
+                  {waStep === 'qr' && (
+                    <div
+                      className="flex flex-col items-center justify-center py-6 rounded-lg"
+                      style={{ backgroundColor: COLORS.surface, border: `1px solid ${COLORS.borderSubtle}` }}
+                    >
+                      <div
+                        className="flex items-center justify-center rounded-lg"
+                        style={{
+                          width: 120,
+                          height: 120,
+                          backgroundColor: COLORS.navy,
+                          border: `2px solid ${COLORS.navyBorder}`,
+                        }}
+                      >
+                        <QrCode size={48} style={{ color: COLORS.textPrimaryDark }} />
+                      </div>
+                      <div className="text-[11px] mt-2 animate-pulse" style={{ color: COLORS.orange }}>
+                        Scan QR code with WhatsApp…
+                      </div>
+                    </div>
+                  )}
+                  {waStep === 'connected' && (
+                    <div
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-md text-[12px] font-semibold"
+                      style={{ backgroundColor: COLORS.successBg, color: COLORS.successDark, border: `1px solid ${COLORS.success}` }}
+                    >
+                      <CheckCircle2 size={14} />
+                      WHATSAPP GATEWAY CONNECTED: +27 82 123 4567
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {activeTab === 'agents' && (
-          <div className="space-y-4">
-            {[
-              { name: 'Webwright Agent', desc: 'Autonomous web scraping & form filling', enabled: true },
-              { name: 'XML Compactor', desc: 'Payload optimization for CargoWise', enabled: true },
-              { name: 'RLA Sentinel', desc: 'SARS RLA status monitoring & alerts', enabled: true },
-              { name: 'Email Ingestion', desc: 'Automated document extraction from email', enabled: true },
-              { name: 'VAT Engine', desc: 'Auto-calculate VAT for customs declarations', enabled: false },
-            ].map((agent) => (
-              <div
-                key={agent.name}
-                className="flex items-center justify-between p-3 rounded-lg border"
-                style={{ borderColor: COLORS.borderSubtle, backgroundColor: COLORS.canvas }}
-              >
-                <div>
-                  <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
-                    {agent.name}
-                  </div>
-                  <div className="text-[11px]" style={{ color: COLORS.textTertiary }}>
-                    {agent.desc}
-                  </div>
-                </div>
-                <div
-                  className="w-10 h-5 rounded-full relative cursor-pointer"
-                  style={{ backgroundColor: agent.enabled ? COLORS.success : COLORS.borderLight }}
-                >
-                  <div
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
-                    style={{ left: agent.enabled ? 22 : 2 }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* ═══════ Tab 4: Compliance Shield Rules ═══════ */}
+        {activeTab === 'compliance' && (
+          <div className="max-w-3xl">
+            <div style={sectionHeaderStyle}>Compliance Shield Rules Panel</div>
 
-        {activeTab === 'notifications' && (
-          <div className="space-y-4">
-            {[
-              { name: 'Shipment Created', desc: 'New shipment ingested from email/WhatsApp', enabled: true },
-              { name: 'Shield Alert', desc: 'Compliance shield hold or fail', enabled: true },
-              { name: 'CW Draft Created', desc: 'CargoWise draft successfully created', enabled: true },
-              { name: 'RLA Status Change', desc: 'Importer RLA suspended or reactivated', enabled: true },
-              { name: 'Daily Summary', desc: 'Daily email digest of queue status', enabled: false },
-            ].map((n) => (
+            <div className="space-y-4 mb-6">
+              {/* Module 1 */}
               <div
-                key={n.name}
-                className="flex items-center justify-between p-3 rounded-lg border"
-                style={{ borderColor: COLORS.borderSubtle, backgroundColor: COLORS.canvas }}
+                className="rounded-lg p-4"
+                style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
               >
-                <div>
-                  <div className="text-[13px] font-medium" style={{ color: COLORS.textPrimaryLight }}>
-                    {n.name}
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: COLORS.orange }}>Module 1</span>
+                    <span className="text-[13px] font-medium ml-2" style={{ color: COLORS.textPrimaryLight }}>
+                      Invoice ↔ PL Cross-Reference
+                    </span>
                   </div>
-                  <div className="text-[11px]" style={{ color: COLORS.textTertiary }}>
-                    {n.desc}
-                  </div>
+                  <SettingsToggleSwitch on={mod1} onToggle={() => setMod1((v) => !v)} />
                 </div>
-                <div
-                  className="w-10 h-5 rounded-full relative cursor-pointer"
-                  style={{ backgroundColor: n.enabled ? COLORS.success : COLORS.borderLight }}
-                >
-                  <div
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
-                    style={{ left: n.enabled ? 22 : 2 }}
-                  />
+                {mod1 && (
+                  <div className="mt-3 ml-4">
+                    <label style={labelStyle}>Weight Tolerance Threshold</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={mod1Weight}
+                        onChange={(e) => setMod1Weight(e.target.value)}
+                        style={{ ...inputStyle, width: 120 }}
+                      />
+                      <span className="text-[12px]" style={{ color: COLORS.textTertiary }}>kg</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Module 2 */}
+              <div
+                className="rounded-lg p-4"
+                style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: COLORS.orange }}>Module 2</span>
+                    <span className="text-[13px] font-medium ml-2" style={{ color: COLORS.textPrimaryLight }}>
+                      8-Digit HS Code Format Check
+                    </span>
+                  </div>
+                  <SettingsToggleSwitch on={mod2} onToggle={() => setMod2((v) => !v)} />
                 </div>
               </div>
-            ))}
+
+              {/* Module 3 */}
+              <div
+                className="rounded-lg p-4"
+                style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: COLORS.orange }}>Module 3</span>
+                    <span className="text-[13px] font-medium ml-2" style={{ color: COLORS.textPrimaryLight }}>
+                      SACU/Non-SACU VAT Engine
+                    </span>
+                  </div>
+                  <SettingsToggleSwitch on={mod3} onToggle={() => setMod3((v) => !v)} />
+                </div>
+                {mod3 && (
+                  <div className="mt-3 ml-4">
+                    <label style={labelStyle}>Import VAT Percentage</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={mod3VatPct}
+                        onChange={(e) => setMod3VatPct(e.target.value)}
+                        style={{ ...inputStyle, width: 120 }}
+                      />
+                      <span className="text-[12px]" style={{ color: COLORS.textTertiary }}>%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Module 4 */}
+              <div
+                className="rounded-lg p-4"
+                style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: COLORS.orange }}>Module 4</span>
+                    <span className="text-[13px] font-medium ml-2" style={{ color: COLORS.textPrimaryLight }}>
+                      RLA eFiling Importer Monitor
+                    </span>
+                  </div>
+                  <SettingsToggleSwitch on={mod4} onToggle={() => setMod4((v) => !v)} />
+                </div>
+                {mod4 && (
+                  <div className="mt-3 ml-4">
+                    <label style={labelStyle}>SARS eFiling Username</label>
+                    <input
+                      value={mod4SarsUser}
+                      onChange={(e) => setMod4SarsUser(e.target.value)}
+                      style={{ ...inputStyle, width: 240 }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Module 5 */}
+              <div
+                className="rounded-lg p-4"
+                style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: COLORS.orange }}>Module 5</span>
+                    <span className="text-[13px] font-medium ml-2" style={{ color: COLORS.textPrimaryLight }}>
+                      DA 65 Temporary Export Alert
+                    </span>
+                  </div>
+                  <SettingsToggleSwitch on={mod5} onToggle={() => setMod5((v) => !v)} />
+                </div>
+              </div>
+
+              {/* Module 6 */}
+              <div
+                className="rounded-lg p-4"
+                style={{ backgroundColor: COLORS.canvas, border: `1px solid ${COLORS.borderSubtle}` }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: COLORS.orange }}>Module 6</span>
+                    <span className="text-[13px] font-medium ml-2" style={{ color: COLORS.textPrimaryLight }}>
+                      DA 179 Sugar Tax Levy Calculator
+                    </span>
+                  </div>
+                  <SettingsToggleSwitch on={mod6} onToggle={() => setMod6((v) => !v)} />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4" style={{ borderTop: `1px solid ${COLORS.borderSubtle}` }}>
+              <button
+                onClick={handleSaveShield}
+                className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+                style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Shield size={14} />
+                  Save & Enforce Shield
+                </span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1918,10 +2678,14 @@ export default function CargoIQApp() {
           transition: 'margin-left 200ms cubic-bezier(0.4,0,0.2,1)',
         }}
       >
-        {/* CargoFlow uses full height, other views scroll normally */}
+        {/* CargoFlow and Settings use full height, other views scroll normally */}
         {view === 'cargoflow' ? (
           <div className="flex-1 overflow-hidden">
             <CargoFlowView />
+          </div>
+        ) : view === 'settings' ? (
+          <div className="flex-1 overflow-hidden">
+            <SettingsView />
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
@@ -1929,6 +2693,7 @@ export default function CargoIQApp() {
           </div>
         )}
       </main>
+      <Toaster />
     </div>
   );
 }
