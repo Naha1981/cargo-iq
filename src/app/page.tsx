@@ -1607,7 +1607,9 @@ function XMLPayloadCompactor() {
 }
 
 function RLASentinel() {
-  const statuses = mockRlaStatuses;
+  const [statuses, setStatuses] = useState(mockRlaStatuses);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditResult, setAuditResult] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
   const statusIcon = (status: RlaStatus['rlaStatus']) => {
     switch (status) {
@@ -1637,6 +1639,67 @@ function RLASentinel() {
       </span>
     );
   };
+
+  const handleRunAudit = useCallback(async () => {
+    if (isAuditing) return;
+    setIsAuditing(true);
+    setAuditResult(null);
+
+    // Simulate eFiling audit: refresh each importer's RLA status with random state changes
+    const auditSteps = [
+      'Connecting to SARS eFiling gateway...',
+      'Authenticating with SARS credentials...',
+      'Querying RLA status for all importers...',
+      'Cross-referencing with customs broker records...',
+      'Generating compliance report...',
+    ];
+
+    // Simulate step-by-step delay
+    for (let i = 0; i < auditSteps.length; i++) {
+      await new Promise((r) => setTimeout(r, 600));
+    }
+
+    // Simulate status refresh — randomly flip one status to keep it realistic
+    const refreshed = statuses.map((s, idx) => {
+      // Randomly change one importer's status to simulate a real audit discovering changes
+      if (idx === 2 && s.rlaStatus === 'suspended') {
+        // Maybe the suspended one gets reactivated
+        return { ...s, rlaStatus: 'active' as const, lastCheckedAt: new Date().toISOString(), suspendedSince: null, alertSent: false };
+      }
+      if (idx === 4 && s.rlaStatus === 'inactive') {
+        // Maybe the inactive one gets flagged suspended
+        return { ...s, rlaStatus: 'suspended' as const, lastCheckedAt: new Date().toISOString(), suspendedSince: new Date().toISOString(), alertSent: true };
+      }
+      return { ...s, lastCheckedAt: new Date().toISOString() };
+    });
+
+    setStatuses(refreshed);
+
+    const suspendedCount = refreshed.filter((s) => s.rlaStatus === 'suspended').length;
+    const inactiveCount = refreshed.filter((s) => s.rlaStatus === 'inactive').length;
+
+    if (suspendedCount > 0) {
+      setAuditResult({
+        type: 'error',
+        message: `Audit complete: ${suspendedCount} RLA(s) SUSPENDED, ${inactiveCount} INACTIVE. Immediate action required.`,
+      });
+    } else if (inactiveCount > 0) {
+      setAuditResult({
+        type: 'warning',
+        message: `Audit complete: ${inactiveCount} RLA(s) INACTIVE. Review recommended.`,
+      });
+    } else {
+      setAuditResult({
+        type: 'success',
+        message: `Audit complete: All ${refreshed.length} RLA(s) ACTIVE. No issues found.`,
+      });
+    }
+
+    setIsAuditing(false);
+
+    // Auto-clear result after 8 seconds
+    setTimeout(() => setAuditResult(null), 8000);
+  }, [isAuditing, statuses]);
 
   return (
     <div className="rounded-lg border overflow-hidden" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.borderLight }}>
@@ -1683,16 +1746,41 @@ function RLASentinel() {
         ))}
       </div>
 
+      {/* Audit Result Banner */}
+      {auditResult && (
+        <div
+          className="mx-4 mt-2 px-3 py-2 rounded-md text-[11px] font-medium flex items-center gap-2"
+          style={{
+            backgroundColor: auditResult.type === 'success' ? COLORS.successBg : auditResult.type === 'warning' ? COLORS.warningBg : COLORS.errorBg,
+            color: auditResult.type === 'success' ? COLORS.successDark : auditResult.type === 'warning' ? COLORS.warningDark : COLORS.errorDark,
+          }}
+        >
+          {auditResult.type === 'success' ? <CheckCircle2 size={14} /> : auditResult.type === 'warning' ? <AlertTriangle size={14} /> : <XCircle size={14} />}
+          {auditResult.message}
+        </div>
+      )}
+
       {/* Audit Button */}
       <div className="px-4 py-3">
         <button
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-[12px] font-semibold border transition-colors"
+          onClick={handleRunAudit}
+          disabled={isAuditing}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-[12px] font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ borderColor: COLORS.orange, color: COLORS.orange, backgroundColor: 'transparent' }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeSubtle)}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          onMouseEnter={(e) => { if (!isAuditing) e.currentTarget.style.backgroundColor = COLORS.orangeSubtle; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
         >
-          <RefreshCw size={14} />
-          Run eFiling Audit Now
+          {isAuditing ? (
+            <>
+              <Loader2 size={14} className="animate-spin" />
+              Auditing eFiling Status...
+            </>
+          ) : (
+            <>
+              <RefreshCw size={14} />
+              Run eFiling Audit Now
+            </>
+          )}
         </button>
       </div>
     </div>
