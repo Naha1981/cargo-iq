@@ -1,0 +1,21 @@
+[CargoIQ Demo Attachment - airway_bill #43355]
+
+This is a simulated freight document for development purposes.
+Generated at: 2026-05-27T06:12:33.084Z
+
+Document Type: airway_bill
+Reference: 43355
+Status: DEMO
+
+--- DOCUMENT CONTENT ---
+Shipper: Demo Shipping Co.
+Consignee: Demo Imports (Pty) Ltd
+Origin: CNSHA (Shanghai)
+Destination: ZADUR (Durban)
+Gross Weight: 11108.8 KGS
+Net Weight: 17667.4 KGS
+Packages: 477
+HS Code: 11097858
+Invoice Value: USD 90163.58
+Incoterms: CIF
+--- END DOCUMENT ---

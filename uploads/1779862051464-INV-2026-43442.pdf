@@ -1,0 +1,21 @@
+[CargoIQ Demo Attachment - commercial_invoice #43442]
+
+This is a simulated freight document for development purposes.
+Generated at: 2026-05-27T06:07:31.443Z
+
+Document Type: commercial_invoice
+Reference: 43442
+Status: DEMO
+
+--- DOCUMENT CONTENT ---
+Shipper: Demo Shipping Co.
+Consignee: Demo Imports (Pty) Ltd
+Origin: CNSHA (Shanghai)
+Destination: ZADUR (Durban)
+Gross Weight: 19425.1 KGS
+Net Weight: 15378.3 KGS
+Packages: 429
+HS Code: 48379445
+Invoice Value: USD 79763.72
+Incoterms: CIF
+--- END DOCUMENT ---

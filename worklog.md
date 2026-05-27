@@ -578,3 +578,25 @@ Stage Summary:
 - Complete Settings page with 4 sub-tabs matching the detailed specification
 - Custom styled sliders and toggle switches for government-portal aesthetic
 - File: /home/z/my-project/src/app/page.tsx (2699 lines), /home/z/my-project/src/app/globals.css (860+ lines)
+
+---
+Task ID: 9
+Agent: Main Agent
+Task: Fix hydration error on WiseLayer/Webwright page + fix non-responsive CargoFlow AI buttons
+
+Work Log:
+- Investigated hydration error: "Hydration failed because the server rendered text didn't match the client"
+- Root cause 1: Hex color values (e.g., '#F1F4F8') in inline styles get normalized by the browser to rgb() format (e.g., 'rgb(241, 244, 248)'), causing React to detect a mismatch between SSR HTML and client virtual DOM
+- Root cause 2: `relativeTime()` function using `Date.now()` produces different values on server vs client during SSR hydration
+- Fix 1: Converted ALL hex colors in the COLORS constant from '#XXXXXX' format to 'rgb(R, G, B)' format (28 color values)
+- Fix 2: Converted all hardcoded hex colors in inline styles throughout the component (Webwright terminal dark theme colors, confidence indicators, table headers, etc.)
+- Fix 3: Added SSR guard to `relativeTime()` function — returns empty string during server-side rendering (typeof window === 'undefined'), only computes relative time on the client
+- Fix 4: Fixed JSX syntax error where `}}>` was split across two lines causing a rendering issue
+- The non-responsive "Upload Document" and "Release to CargoWise" buttons were caused by the hydration error — when React fails to hydrate properly, event handlers are not attached to DOM elements
+- Settings page already fully implemented with all 4 sub-tabs from previous sessions
+
+Stage Summary:
+- Hydration error fully resolved by converting all inline style hex colors to rgb() format
+- Date.now() SSR mismatch fixed with typeof window guard
+- Button responsiveness restored (was caused by hydration failure preventing event handler attachment)
+- No code changes needed for Settings page — already complete with CargoWise eAdaptor, AI Thresholds, Ingestion Channels, and Compliance Shield tabs

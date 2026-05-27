@@ -1,313 +1,13 @@
 {
   "lastProcessedUid": 0,
-  "emailsProcessed": 149,
-  "attachmentsExtracted": 285,
-  "freightCount": 148,
+  "emailsProcessed": 169,
+  "attachmentsExtracted": 329,
+  "freightCount": 168,
   "nonFreightCount": 1,
   "unknownCount": 0,
-  "lastPollTime": "2026-05-27T05:58:28.874Z",
+  "lastPollTime": "2026-05-27T06:18:35.333Z",
   "imapConnected": false,
   "processingLog": [
-    {
-      "timestamp": "2026-05-27T05:25:18.357Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Shipment Documents: INV-2026-41814 / B/L MAFU-41814\" (2 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:25:18.357Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:26:18.379Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Packing List & Invoice for Shipment #49674\" from freight@barloworld.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:26:18.654Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Packing List & Invoice for Shipment #49674\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:26:18.655Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:27:18.684Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Freight Invoice #46153 - Durban to Cape Town\" from logistics@imperial.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:27:18.949Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Freight Invoice #46153 - Durban to Cape Town\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:27:18.950Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:28:18.972Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Commercial Invoice & Packing List - Container MSKU-48472\" from shipping@msc.com (2 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:28:19.272Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Commercial Invoice & Packing List - Container MSKU-48472\" (2 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:28:19.273Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:29:19.302Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Freight Invoice #46554 - Durban to Cape Town\" from cargo@transnet.net (2 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:29:19.626Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Freight Invoice #46554 - Durban to Cape Town\" (2 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:29:19.626Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:30:19.628Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Import Clearance: Container TCLU-46103 - Arrived Port Elizabeth\" from customs@prospect.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:30:19.986Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Import Clearance: Container TCLU-46103 - Arrived Port Elizabeth\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:30:19.987Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:31:20.017Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Shipment Documents: INV-2026-41814 / B/L MAFU-41814\" from forwarding@bidcargo.co.za (3 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:31:20.325Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Shipment Documents: INV-2026-41814 / B/L MAFU-41814\" (3 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:31:20.326Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:32:20.331Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"B/L COSA-40842 - Vessel COSCO FORTUNE - ETD Durban\" from operations@grindrod.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:32:20.616Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"B/L COSA-40842 - Vessel COSCO FORTUNE - ETD Durban\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:32:20.616Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:33:20.646Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Freight Invoice #48364 - Durban to Cape Town\" from shipping@safmarine.com (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:33:20.947Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Freight Invoice #48364 - Durban to Cape Town\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:33:20.947Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:34:20.963Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Shipment Documents: INV-2026-45963 / B/L MAFU-45963\" from operations@maersk.com (3 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:34:21.251Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Shipment Documents: INV-2026-45963 / B/L MAFU-45963\" (3 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:34:21.252Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:35:21.264Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Freight Invoice #45660 - Durban to Cape Town\" from freight@barloworld.co.za (2 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:35:21.545Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Freight Invoice #45660 - Durban to Cape Town\" (2 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:35:21.546Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:36:21.571Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Commercial Invoice & Packing List - Container MSKU-42266\" from customs@prospect.co.za (3 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:36:21.844Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Commercial Invoice & Packing List - Container MSKU-42266\" (3 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:36:21.844Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:37:21.849Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Import Clearance: Container TCLU-45462 - Arrived Port Elizabeth\" from forwarding@bidcargo.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:37:22.109Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Import Clearance: Container TCLU-45462 - Arrived Port Elizabeth\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:37:22.109Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:38:22.112Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"B/L COSA-42766 - Vessel COSCO FORTUNE - ETD Durban\" from cargo@transnet.net (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:38:22.410Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"B/L COSA-42766 - Vessel COSCO FORTUNE - ETD Durban\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:38:22.411Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:39:22.440Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"B/L COSA-49537 - Vessel COSCO FORTUNE - ETD Durban\" from shipping@safmarine.com (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:39:22.729Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"B/L COSA-49537 - Vessel COSCO FORTUNE - ETD Durban\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:39:22.730Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:40:22.755Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Packing List & Invoice for Shipment #44302\" from logistics@cma-cgm.com (3 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:40:23.004Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Packing List & Invoice for Shipment #44302\" (3 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:40:23.005Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:41:23.015Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Commercial Invoice & Packing List - Container MSKU-43575\" from freight@barloworld.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:41:23.318Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Commercial Invoice & Packing List - Container MSKU-43575\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:41:23.319Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:42:23.332Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Delivery Note - Warehouse Release #48430\" from forwarding@bidcargo.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:42:23.621Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Delivery Note - Warehouse Release #48430\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:42:23.622Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:43:23.648Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"Customs Clearance Documents - Import 44772\" from freight@barloworld.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:43:23.914Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"Customs Clearance Documents - Import 44772\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:43:23.915Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:44:23.943Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"House Bill of Lading HBL-43560 - Consolidated Shipment\" from logistics@imperial.co.za (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:44:24.252Z",
-      "type": "success",
-      "message": "Posted freight email to CargoIQ: \"House Bill of Lading HBL-43560 - Consolidated Shipment\" (1 attachments)"
-    },
-    {
-      "timestamp": "2026-05-27T05:44:24.252Z",
-      "type": "success",
-      "message": "Poll complete: processed 1 email(s)"
-    },
-    {
-      "timestamp": "2026-05-27T05:45:24.282Z",
-      "type": "info",
-      "message": "[DEMO] Generated freight email: \"B/L COSA-40150 - Vessel COSCO FORTUNE - ETD Durban\" from freight@barloworld.co.za (1 attachments)"
-    },
     {
       "timestamp": "2026-05-27T05:45:24.581Z",
       "type": "success",
@@ -507,6 +207,306 @@
       "timestamp": "2026-05-27T05:58:28.873Z",
       "type": "success",
       "message": "Posted freight email to CargoIQ: \"House Bill of Lading HBL-48665 - Consolidated Shipment\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T05:58:28.874Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T05:59:28.903Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Freight Invoice #41712 - Durban to Cape Town\" from shipping@safmarine.com (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T05:59:29.217Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Freight Invoice #41712 - Durban to Cape Town\" (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T05:59:29.217Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:00:29.247Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"AWB 157-48947 - Air Shipment from Shanghai to Johannesburg\" from shipping@safmarine.com (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:00:29.515Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"AWB 157-48947 - Air Shipment from Shanghai to Johannesburg\" (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:00:29.516Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:01:29.545Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"AWB 157-44346 - Air Shipment from Shanghai to Johannesburg\" from logistics@cma-cgm.com (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:01:29.797Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"AWB 157-44346 - Air Shipment from Shanghai to Johannesburg\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:01:29.798Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:02:29.807Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Export Documentation - Booking Ref BK-42547\" from forwarding@bidcargo.co.za (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:02:30.158Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Export Documentation - Booking Ref BK-42547\" (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:02:30.159Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:03:30.181Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Import Clearance: Container TCLU-48076 - Arrived Port Elizabeth\" from cargo@transnet.net (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:03:30.424Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Import Clearance: Container TCLU-48076 - Arrived Port Elizabeth\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:03:30.424Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:04:30.443Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"House Bill of Lading HBL-44662 - Consolidated Shipment\" from freight@barloworld.co.za (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:04:30.706Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"House Bill of Lading HBL-44662 - Consolidated Shipment\" (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:04:30.707Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:05:30.731Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Import Clearance: Container TCLU-44725 - Arrived Port Elizabeth\" from operations@maersk.com (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:05:31.086Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Import Clearance: Container TCLU-44725 - Arrived Port Elizabeth\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:05:31.087Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:06:31.107Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Export Documentation - Booking Ref BK-49454\" from forwarding@bidcargo.co.za (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:06:31.414Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Export Documentation - Booking Ref BK-49454\" (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:06:31.415Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:07:31.443Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Shipment Documents: INV-2026-43442 / B/L MAFU-43442\" from freight@barloworld.co.za (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:07:31.822Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Shipment Documents: INV-2026-43442 / B/L MAFU-43442\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:07:31.822Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:08:31.853Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Commercial Invoice & Packing List - Container MSKU-43252\" from operations@maersk.com (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:08:32.127Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Commercial Invoice & Packing List - Container MSKU-43252\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:08:32.128Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:09:32.157Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Commercial Invoice & Packing List - Container MSKU-45967\" from operations@grindrod.co.za (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:09:32.464Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Commercial Invoice & Packing List - Container MSKU-45967\" (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:09:32.465Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:10:32.468Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"B/L COSA-46049 - Vessel COSCO FORTUNE - ETD Durban\" from logistics@imperial.co.za (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:10:32.744Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"B/L COSA-46049 - Vessel COSCO FORTUNE - ETD Durban\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:10:32.744Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:11:32.771Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"House Bill of Lading HBL-47363 - Consolidated Shipment\" from operations@maersk.com (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:11:33.054Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"House Bill of Lading HBL-47363 - Consolidated Shipment\" (2 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:11:33.054Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:12:33.084Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"B/L COSA-43355 - Vessel COSCO FORTUNE - ETD Durban\" from shipping@msc.com (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:12:33.395Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"B/L COSA-43355 - Vessel COSCO FORTUNE - ETD Durban\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:12:33.396Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:13:33.426Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Proforma Invoice - Cargo Shipment 46639 - CIF Durban\" from logistics@imperial.co.za (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:13:33.722Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Proforma Invoice - Cargo Shipment 46639 - CIF Durban\" (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:13:33.723Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:14:33.745Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Customs Clearance Documents - Import 44101\" from operations@maersk.com (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:14:34.020Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Customs Clearance Documents - Import 44101\" (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:14:34.020Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:15:34.021Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Delivery Note - Warehouse Release #44364\" from operations@grindrod.co.za (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:15:34.365Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Delivery Note - Warehouse Release #44364\" (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:15:34.365Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:16:34.395Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"AWB 157-41692 - Air Shipment from Shanghai to Johannesburg\" from cargo@transnet.net (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:16:34.741Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"AWB 157-41692 - Air Shipment from Shanghai to Johannesburg\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:16:34.742Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:17:34.771Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"B/L COSA-41856 - Vessel COSCO FORTUNE - ETD Durban\" from logistics@cma-cgm.com (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:17:35.060Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"B/L COSA-41856 - Vessel COSCO FORTUNE - ETD Durban\" (3 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:17:35.061Z",
+      "type": "success",
+      "message": "Poll complete: processed 1 email(s)"
+    },
+    {
+      "timestamp": "2026-05-27T06:18:35.091Z",
+      "type": "info",
+      "message": "[DEMO] Generated freight email: \"Customs Clearance Documents - Import 48329\" from operations@grindrod.co.za (1 attachments)"
+    },
+    {
+      "timestamp": "2026-05-27T06:18:35.333Z",
+      "type": "success",
+      "message": "Posted freight email to CargoIQ: \"Customs Clearance Documents - Import 48329\" (1 attachments)"
     }
   ]
 }

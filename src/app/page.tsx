@@ -71,35 +71,38 @@ import { Toaster } from '@/components/ui/toaster';
    DESIGN TOKENS
    ══════════════════════════════════════════════════════════════════════ */
 
+// NOTE: Using rgb() format instead of hex (#) to prevent Next.js hydration mismatches.
+// The browser normalizes hex colors to rgb() in DOM style properties, which causes
+// React to detect a mismatch between SSR HTML and client virtual DOM.
 const COLORS = {
-  navy: '#0B1F2A',
-  navyLight: '#132D3E',
-  navyBorder: '#1E3A4F',
-  orange: '#FF7A1A',
-  orangeHover: '#E56A10',
-  orangeSubtle: '#FFF3E8',
-  orangeBorder: '#FFB574',
-  canvas: '#F1F4F8',
-  surface: '#FFFFFF',
-  surfaceSubtle: '#E8ECF1',
-  textPrimaryDark: '#E2E8F0',
-  textSecondaryDark: '#94A3B8',
-  textPrimaryLight: '#0D1B2A',
-  textSecondaryLight: '#3D5166',
-  textTertiary: '#64748B',
-  borderLight: '#C8D0DA',
-  borderSubtle: '#DDE3EA',
-  success: '#10B981',
-  successBg: '#ECFDF5',
-  successDark: '#15632A',
-  warning: '#FF7A1A',
-  warningBg: '#FFF7ED',
-  warningDark: '#7A4F00',
-  error: '#EF4444',
-  errorBg: '#FEF2F2',
-  errorDark: '#9B1C1C',
-  accent: '#B8860B',
-  accentBg: '#FDF3DC',
+  navy: 'rgb(11, 31, 42)',
+  navyLight: 'rgb(19, 45, 62)',
+  navyBorder: 'rgb(30, 58, 79)',
+  orange: 'rgb(255, 122, 26)',
+  orangeHover: 'rgb(229, 106, 16)',
+  orangeSubtle: 'rgb(255, 243, 232)',
+  orangeBorder: 'rgb(255, 181, 116)',
+  canvas: 'rgb(241, 244, 248)',
+  surface: 'rgb(255, 255, 255)',
+  surfaceSubtle: 'rgb(232, 236, 241)',
+  textPrimaryDark: 'rgb(226, 232, 240)',
+  textSecondaryDark: 'rgb(148, 163, 184)',
+  textPrimaryLight: 'rgb(13, 27, 42)',
+  textSecondaryLight: 'rgb(61, 81, 102)',
+  textTertiary: 'rgb(100, 116, 139)',
+  borderLight: 'rgb(200, 208, 218)',
+  borderSubtle: 'rgb(221, 227, 234)',
+  success: 'rgb(16, 185, 129)',
+  successBg: 'rgb(236, 253, 245)',
+  successDark: 'rgb(21, 99, 42)',
+  warning: 'rgb(255, 122, 26)',
+  warningBg: 'rgb(255, 247, 237)',
+  warningDark: 'rgb(122, 79, 0)',
+  error: 'rgb(239, 68, 68)',
+  errorBg: 'rgb(254, 242, 242)',
+  errorDark: 'rgb(155, 28, 28)',
+  accent: 'rgb(184, 134, 11)',
+  accentBg: 'rgb(253, 243, 220)',
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -115,7 +118,10 @@ function formatZARShort(n: number): string {
 }
 
 function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+  // Use a fixed reference to avoid hydration mismatch between server and client
+  const now = typeof window !== 'undefined' ? Date.now() : 0;
+  if (now === 0) return '';
+  const diff = now - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -132,14 +138,14 @@ function formatSeconds(s: number): string {
 
 function confidenceColor(pct: number): string {
   if (pct >= 85) return COLORS.success;
-  if (pct >= 65) return '#F59E0B';
+  if (pct >= 65) return 'rgb(245, 158, 11)';
   return COLORS.error;
 }
 
 function confidenceBgColor(pct: number): string {
-  if (pct >= 85) return '#D1FAE5';
-  if (pct >= 65) return '#FEF3C7';
-  return '#FEE2E2';
+  if (pct >= 85) return 'rgb(209, 250, 229)';
+  if (pct >= 65) return 'rgb(254, 243, 199)';
+  return 'rgb(254, 226, 226)';
 }
 
 function confidenceLabel(pct: number): string {
@@ -368,7 +374,7 @@ function TopNav({
       >
         <div
           className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
-          style={{ backgroundColor: COLORS.accent, color: '#FFF' }}
+          style={{ backgroundColor: COLORS.accent, color: 'rgb(255, 255, 255)' }}
         >
           JM
         </div>
@@ -396,7 +402,7 @@ function DashboardView() {
       up: true,
       icon: Package,
       color: COLORS.navyLight,
-      bg: '#EBF3FB',
+      bg: 'rgb(235, 243, 251)',
     },
     {
       label: 'Automation Rate',
@@ -431,9 +437,9 @@ function DashboardView() {
   const shieldTotal = ss.pass + ss.hold + ss.fail + ss.pending;
   const shieldItems = [
     { label: 'Pass', count: ss.pass, color: COLORS.success, pct: shieldTotal > 0 ? Math.round((ss.pass / shieldTotal) * 100) : 0 },
-    { label: 'Hold', count: ss.hold, color: '#F59E0B', pct: shieldTotal > 0 ? Math.round((ss.hold / shieldTotal) * 100) : 0 },
+    { label: 'Hold', count: ss.hold, color: 'rgb(245, 158, 11)', pct: shieldTotal > 0 ? Math.round((ss.hold / shieldTotal) * 100) : 0 },
     { label: 'Fail', count: ss.fail, color: COLORS.error, pct: shieldTotal > 0 ? Math.round((ss.fail / shieldTotal) * 100) : 0 },
-    { label: 'Pending', count: ss.pending, color: '#94A3B8', pct: shieldTotal > 0 ? Math.round((ss.pending / shieldTotal) * 100) : 0 },
+    { label: 'Pending', count: ss.pending, color: 'rgb(148, 163, 184)', pct: shieldTotal > 0 ? Math.round((ss.pending / shieldTotal) * 100) : 0 },
   ];
 
   return (
@@ -735,7 +741,7 @@ function DocumentViewer({ shipment }: { shipment: ShipmentDetail | null }) {
                 className="px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
                 style={{
                   backgroundColor: activeTab === tab ? COLORS.orange : 'transparent',
-                  color: activeTab === tab ? '#FFF' : COLORS.textSecondaryDark,
+                  color: activeTab === tab ? 'rgb(255, 255, 255)' : COLORS.textSecondaryDark,
                 }}
               >
                 {labels[tab]}
@@ -749,7 +755,7 @@ function DocumentViewer({ shipment }: { shipment: ShipmentDetail | null }) {
       <div className="flex-1 p-4 overflow-auto" style={{ scrollbarWidth: 'thin' }}>
         <div
           className="mx-auto rounded-lg p-6 max-w-lg"
-          style={{ backgroundColor: '#0F2433', border: `1px solid ${COLORS.navyBorder}` }}
+          style={{ backgroundColor: 'rgb(15, 36, 51)', border: `1px solid ${COLORS.navyBorder}` }}
         >
           {/* SAD 500 Form Representation */}
           <div className="text-center mb-6">
@@ -783,7 +789,7 @@ function DocumentViewer({ shipment }: { shipment: ShipmentDetail | null }) {
               <div
                 key={field.label}
                 className="p-2 rounded"
-                style={{ backgroundColor: '#0A1A26', border: `1px solid ${COLORS.navyBorder}` }}
+                style={{ backgroundColor: 'rgb(10, 26, 38)', border: `1px solid ${COLORS.navyBorder}` }}
               >
                 <div style={{ color: COLORS.textSecondaryDark }} className="mb-0.5 text-[9px] uppercase tracking-wider">
                   {field.label}
@@ -868,7 +874,7 @@ function AIEditableFormField({
     confidence === 'high'
       ? COLORS.success
       : confidence === 'medium'
-        ? '#F59E0B'
+        ? 'rgb(245, 158, 11)'
         : COLORS.orange;
 
   const showWarning = confidence === 'low';
@@ -881,7 +887,7 @@ function AIEditableFormField({
           {label}
         </label>
         {confidence === 'medium' && (
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#F59E0B' }} />
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(245, 158, 11)' }} />
         )}
         {showWarning && <AlertCircle size={12} style={{ color: COLORS.orange }} />}
       </div>
@@ -906,7 +912,7 @@ function AIEditableFormField({
           <button
             onClick={onEditSave}
             className="p-1.5 rounded"
-            style={{ backgroundColor: COLORS.success, color: '#FFF' }}
+            style={{ backgroundColor: COLORS.success, color: 'rgb(255, 255, 255)' }}
           >
             <Check size={14} />
           </button>
@@ -1119,7 +1125,7 @@ function SARSPenaltyShieldBanner({ shipment }: { shipment: ShipmentDetail | null
     return (
       <div
         className="flex items-center gap-3 px-4 py-2.5 shrink-0"
-        style={{ backgroundColor: '#ECFDF5', borderTop: `1px solid ${COLORS.success}` }}
+        style={{ backgroundColor: 'rgb(236, 253, 245)', borderTop: `1px solid ${COLORS.success}` }}
       >
         <CheckCircle2 size={16} style={{ color: COLORS.success }} />
         <span className="text-[12px] font-semibold" style={{ color: COLORS.successDark }}>
@@ -1134,13 +1140,13 @@ function SARSPenaltyShieldBanner({ shipment }: { shipment: ShipmentDetail | null
       className="flex items-center gap-3 px-4 py-2.5 shrink-0 overflow-x-auto"
       style={{ backgroundColor: COLORS.orange, scrollbarWidth: 'thin' }}
     >
-      <Shield size={16} style={{ color: '#FFF' }} />
+      <Shield size={16} style={{ color: 'rgb(255, 255, 255)' }} />
       <span className="text-[12px] font-bold text-white whitespace-nowrap">SARS Penalty Shield:</span>
       {warnings.map((w, i) => (
         <span
           key={i}
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap"
-          style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#FFF' }}
+          style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'rgb(255, 255, 255)' }}
         >
           <AlertTriangle size={11} />
           {w}
@@ -1149,7 +1155,7 @@ function SARSPenaltyShieldBanner({ shipment }: { shipment: ShipmentDetail | null
       {shipment.shieldResults.penaltyRiskDetected && (
         <span
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap"
-          style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: '#FFF' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: 'rgb(255, 255, 255)' }}
         >
           <XCircle size={11} />
           Penalty Risk Detected
@@ -1403,7 +1409,7 @@ function CargoFlowView() {
             onClick={handleUploadClick}
             disabled={isUploading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors disabled:opacity-60"
-            style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+            style={{ backgroundColor: COLORS.orange, color: 'rgb(255, 255, 255)' }}
             onMouseEnter={(e) => { if (!isUploading) e.currentTarget.style.backgroundColor = COLORS.orangeHover; }}
             onMouseLeave={(e) => { if (!isUploading) e.currentTarget.style.backgroundColor = COLORS.orange; }}
           >
@@ -1465,7 +1471,7 @@ function CargoFlowView() {
                 onClick={handleRejectSubmit}
                 disabled={isRejecting || rejectReason.trim().length < 3}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors disabled:opacity-50"
-                style={{ backgroundColor: COLORS.error, color: '#FFF' }}
+                style={{ backgroundColor: COLORS.error, color: 'rgb(255, 255, 255)' }}
               >
                 {isRejecting ? <Loader2 size={13} className="animate-spin" /> : <Ban size={13} />}
                 Submit Rejection
@@ -1506,10 +1512,10 @@ function CargoFlowView() {
             className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors disabled:opacity-50"
             style={{
               backgroundColor: releaseConfirm ? COLORS.success : COLORS.orange,
-              color: '#FFF',
+              color: 'rgb(255, 255, 255)',
             }}
             onMouseEnter={(e) => {
-              if (!isReleasing) e.currentTarget.style.backgroundColor = releaseConfirm ? '#059669' : COLORS.orangeHover;
+              if (!isReleasing) e.currentTarget.style.backgroundColor = releaseConfirm ? 'rgb(5, 150, 105)' : COLORS.orangeHover;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = releaseConfirm ? COLORS.success : COLORS.orange;
@@ -1610,7 +1616,7 @@ function RLASentinel() {
       case 'suspended':
         return <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS.error }} />;
       case 'inactive':
-        return <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#94A3B8' }} />;
+        return <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgb(148, 163, 184)' }} />;
     }
   };
 
@@ -1658,10 +1664,8 @@ function RLASentinel() {
         {statuses.map((r) => (
           <div
             key={r.id}
-            className="flex items-center justify-between px-4 py-2.5 border-b transition-colors"
+            className="flex items-center justify-between px-4 py-2.5 border-b transition-colors hover:bg-bg-canvas"
             style={{ borderColor: COLORS.borderSubtle }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.canvas)}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <div className="flex items-center gap-2.5">
               {statusIcon(r.rlaStatus)}
@@ -1744,11 +1748,11 @@ function WebwrightTerminal() {
   }, [outputLines]);
 
   return (
-    <div className="rounded-lg border overflow-hidden" style={{ borderColor: '#333' }}>
+    <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'rgb(51, 51, 51)' }}>
       {/* Header */}
       <div
         className="px-4 py-3 flex items-center gap-2"
-        style={{ backgroundColor: '#1A1A1A', borderBottom: '1px solid #333' }}
+        style={{ backgroundColor: 'rgb(26, 26, 26)', borderBottom: '1px solid rgb(51, 51, 51)' }}
       >
         <Terminal size={16} style={{ color: COLORS.orange }} />
         <span className="text-[13px] font-semibold" style={{ color: COLORS.orange }}>
@@ -1757,10 +1761,10 @@ function WebwrightTerminal() {
       </div>
 
       {/* Input Area */}
-      <div className="p-4" style={{ backgroundColor: '#0D0D0D' }}>
+      <div className="p-4" style={{ backgroundColor: 'rgb(13, 13, 13)' }}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: '#666' }}>
+            <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: 'rgb(102, 102, 102)' }}>
               Prompt
             </label>
             <input
@@ -1769,8 +1773,8 @@ function WebwrightTerminal() {
               placeholder="e.g. Log into Durban Port, check container MSCU1234567..."
               className="w-full px-3 py-2 text-[13px] rounded border outline-none"
               style={{
-                backgroundColor: '#1A1A1A',
-                borderColor: '#333',
+                backgroundColor: 'rgb(26, 26, 26)',
+                borderColor: 'rgb(51, 51, 51)',
                 color: COLORS.orange,
                 fontFamily: 'var(--font-geist-mono), monospace',
               }}
@@ -1778,7 +1782,7 @@ function WebwrightTerminal() {
             />
           </div>
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: '#666' }}>
+            <label className="text-[11px] font-semibold uppercase tracking-wider mb-1 block" style={{ color: 'rgb(102, 102, 102)' }}>
               Target URL
             </label>
             <input
@@ -1787,8 +1791,8 @@ function WebwrightTerminal() {
               placeholder="https://transnet.portauthority.co.za"
               className="w-full px-3 py-2 text-[13px] rounded border outline-none"
               style={{
-                backgroundColor: '#1A1A1A',
-                borderColor: '#333',
+                backgroundColor: 'rgb(26, 26, 26)',
+                borderColor: 'rgb(51, 51, 51)',
                 color: COLORS.orange,
                 fontFamily: 'var(--font-geist-mono), monospace',
               }}
@@ -1801,8 +1805,8 @@ function WebwrightTerminal() {
           disabled={isRunning || !prompt.trim()}
           className="flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-semibold transition-colors"
           style={{
-            backgroundColor: isRunning ? '#333' : COLORS.orange,
-            color: isRunning ? '#666' : '#FFF',
+            backgroundColor: isRunning ? 'rgb(51, 51, 51)' : COLORS.orange,
+            color: isRunning ? 'rgb(102, 102, 102)' : 'rgb(255, 255, 255)',
             cursor: isRunning ? 'not-allowed' : 'pointer',
           }}
         >
@@ -1816,10 +1820,10 @@ function WebwrightTerminal() {
         ref={terminalRef}
         className="max-h-64 overflow-y-auto p-4"
         style={{
-          backgroundColor: '#000',
-          borderTop: '1px solid #333',
+          backgroundColor: 'rgb(0, 0, 0)',
+          borderTop: '1px solid rgb(51, 51, 51)',
           scrollbarWidth: 'thin',
-          scrollbarColor: '#333 transparent',
+          scrollbarColor: 'rgb(51, 51, 51) transparent',
         }}
       >
         {/* Previous execution output */}
@@ -1829,7 +1833,7 @@ function WebwrightTerminal() {
               <div
                 key={i}
                 className="text-[12px] font-mono leading-relaxed"
-                style={{ color: line.includes('[system]') ? '#666' : line.includes('SUCCESS') ? COLORS.success : COLORS.orange }}
+                style={{ color: line.includes('[system]') ? 'rgb(102, 102, 102)' : line.includes('SUCCESS') ? COLORS.success : COLORS.orange }}
               >
                 {line}
               </div>
@@ -1844,7 +1848,7 @@ function WebwrightTerminal() {
               <div
                 key={i}
                 className="text-[12px] font-mono leading-relaxed"
-                style={{ color: line.includes('[system]') ? '#666' : line.includes('SUCCESS') ? COLORS.success : COLORS.orange }}
+                style={{ color: line.includes('[system]') ? 'rgb(102, 102, 102)' : line.includes('SUCCESS') ? COLORS.success : COLORS.orange }}
               >
                 {line}
               </div>
@@ -1856,7 +1860,7 @@ function WebwrightTerminal() {
         )}
 
         {!isRunning && outputLines.length === 0 && prevExecutions.length === 0 && (
-          <div className="text-[12px] font-mono" style={{ color: '#444' }}>
+          <div className="text-[12px] font-mono" style={{ color: 'rgb(68, 68, 68)' }}>
             No executions yet. Enter a prompt and click Execute.
           </div>
         )}
@@ -2229,7 +2233,7 @@ function SettingsView() {
               <button
                 onClick={handleSaveConnection}
                 className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
-                style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                style={{ backgroundColor: COLORS.orange, color: 'rgb(255, 255, 255)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
               >
@@ -2307,7 +2311,7 @@ function SettingsView() {
               <button
                 onClick={handleApplyThresholds}
                 className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
-                style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                style={{ backgroundColor: COLORS.orange, color: 'rgb(255, 255, 255)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
               >
@@ -2375,7 +2379,7 @@ function SettingsView() {
                   <button
                     onClick={handleConnectEmail}
                     className="w-full px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
-                    style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                    style={{ backgroundColor: COLORS.orange, color: 'rgb(255, 255, 255)' }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
                   >
@@ -2417,7 +2421,7 @@ function SettingsView() {
                     <button
                       onClick={handleProvisionWhatsApp}
                       className="w-full px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
-                      style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                      style={{ backgroundColor: COLORS.orange, color: 'rgb(255, 255, 255)' }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
                     >
@@ -2606,7 +2610,7 @@ function SettingsView() {
               <button
                 onClick={handleSaveShield}
                 className="px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
-                style={{ backgroundColor: COLORS.orange, color: '#FFF' }}
+                style={{ backgroundColor: COLORS.orange, color: 'rgb(255, 255, 255)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeHover)}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
               >
@@ -2654,7 +2658,7 @@ export default function CargoIQApp() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: COLORS.canvas }}>
+    <div className="min-h-screen flex flex-col bg-bg-canvas">
       <Sidebar
         view={view}
         setView={setView}
