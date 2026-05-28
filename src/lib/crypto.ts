@@ -1,172 +1,92 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-  scryptSync,
-} from "node:crypto";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// CargoIQ — AES-256-GCM Cryptographic Security Service
+// Uses dynamic import of Node.js crypto to avoid turbopack compilation issues
 
 const ALGORITHM = "aes-256-gcm";
-const KEY_LENGTH = 32; // 256 bits
-const IV_LENGTH = 16; // 128 bits
-const AUTH_TAG_LENGTH = 16; // 128 bits
+const KEY_LENGTH = 32;
+const IV_LENGTH = 16;
+const AUTH_TAG_LENGTH = 16;
 
-// ---------------------------------------------------------------------------
-// Key derivation
-// ---------------------------------------------------------------------------
+async function getNodeCrypto() {
+  return await import("crypto");
+}
 
-/**
- * Derive the encryption key from environment variables.
- *
- * Priority:
- * 1. ENCRYPTION_SECRET_KEY — raw 32-byte key as base64url string
- * 2. ENCRYPTION_KEY — legacy passphrase, derived via scrypt
- * 3. Dev default — fixed key for local development only
- */
-function getEncryptionKey(): Buffer {
-  // 1. Preferred: raw 32-byte key encoded as base64url
+async function getEncryptionKey(): Promise<Buffer> {
+  const crypto = await getNodeCrypto();
+  
   const secretKey = process.env.ENCRYPTION_SECRET_KEY;
   if (secretKey) {
-    const key = Buffer.from(secretKey, "base64url");
-    if (key.length === KEY_LENGTH) {
-      return key;
-    }
-    console.warn(
-      `[crypto] ENCRYPTION_SECRET_KEY is ${key.length} bytes, expected ${KEY_LENGTH} — falling back`
-    );
+    const decoded = Buffer.from(secretKey, "base64url");
+    if (decoded.length === KEY_LENGTH) return decoded;
+    return crypto.scryptSync(secretKey, "cargoiq-salt-v2", KEY_LENGTH);
   }
 
-  // 2. Legacy: derive from passphrase via scrypt
-  const passphrase = process.env.ENCRYPTION_KEY;
-  if (passphrase) {
-    return scryptSync(passphrase, "cargoiq-salt-v1", KEY_LENGTH);
+  const legacyKey = process.env.ENCRYPTION_KEY;
+  if (legacyKey) {
+    return crypto.scryptSync(legacyKey, "cargoiq-salt", KEY_LENGTH);
   }
 
-  // 3. Dev default
   if (process.env.NODE_ENV === "production") {
-    console.warn(
-      "[crypto] ⚠ No ENCRYPTION_SECRET_KEY or ENCRYPTION_KEY configured in production — using insecure default"
-    );
-  } else {
-    console.warn(
-      "[crypto] No encryption key configured — using dev default (do not use in production)"
-    );
+    console.error("[crypto] CRITICAL: No encryption key configured in production!");
   }
-
-  return scryptSync("cargoiq-dev-default-key", "cargoiq-salt-v1", KEY_LENGTH);
+  return crypto.scryptSync("cargoiq-default-encryption-key-change-in-production", "cargoiq-salt", KEY_LENGTH);
 }
 
-// Lazy-initialised singleton key
-let _key: Buffer | null = null;
+let _keyCache: Buffer | null = null;
 
-function key(): Buffer {
-  if (!_key) {
-    _key = getEncryptionKey();
-  }
-  return _key;
+async function getKey(): Promise<Buffer> {
+  if (_keyCache) return _keyCache;
+  _keyCache = await getEncryptionKey();
+  return _keyCache;
 }
 
-// ---------------------------------------------------------------------------
-// Encrypt
-// ---------------------------------------------------------------------------
+export async function encrypt(plaintext: string): Promise<string> {
+  const crypto = await getNodeCrypto();
+  const key = await getKey();
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
-/**
- * Encrypt plaintext using AES-256-GCM.
- *
- * Returns a base64-encoded string containing: IV (16 bytes) + AuthTag (16 bytes) + Ciphertext.
- */
-export function encrypt(plaintext: string): string {
-  const iv = randomBytes(IV_LENGTH);
-  const cipher = createCipheriv(ALGORITHM, key(), iv);
-
-  const encrypted = Buffer.concat([
-    cipher.update(plaintext, "utf8"),
-    cipher.final(),
-  ]);
+  let ciphertext = cipher.update(plaintext, "utf8", "base64");
+  ciphertext += cipher.final("base64");
 
   const authTag = cipher.getAuthTag();
-
-  // Layout: [IV 16 bytes][AuthTag 16 bytes][Ciphertext N bytes]
-  const payload = Buffer.concat([iv, authTag, encrypted]);
-
-  return payload.toString("base64");
+  const combined = Buffer.concat([iv, authTag, Buffer.from(ciphertext, "base64")]);
+  return combined.toString("base64");
 }
 
-// ---------------------------------------------------------------------------
-// Decrypt
-// ---------------------------------------------------------------------------
+export async function decrypt(encrypted: string): Promise<string> {
+  const crypto = await getNodeCrypto();
+  const key = await getKey();
+  const combined = Buffer.from(encrypted, "base64");
 
-/**
- * Decrypt a value produced by `encrypt()`.
- *
- * @throws Error if the value cannot be decrypted (wrong key, tampered data, etc.)
- */
-export function decrypt(encrypted: string): string {
-  const payload = Buffer.from(encrypted, "base64");
+  const iv = combined.subarray(0, IV_LENGTH);
+  const authTag = combined.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
+  const ciphertext = combined.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
 
-  if (payload.length < IV_LENGTH + AUTH_TAG_LENGTH) {
-    throw new Error("Invalid encrypted payload: too short");
-  }
-
-  const iv = payload.subarray(0, IV_LENGTH);
-  const authTag = payload.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
-  const ciphertext = payload.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
-
-  const decipher = createDecipheriv(ALGORITHM, key(), iv);
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
 
-  const decrypted = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(),
-  ]);
-
-  return decrypted.toString("utf8");
+  let plaintext = decipher.update(ciphertext, undefined, "utf8");
+  plaintext += decipher.final("utf8");
+  return plaintext;
 }
 
-// ---------------------------------------------------------------------------
-// Safe decrypt
-// ---------------------------------------------------------------------------
-
-/**
- * Decrypt a value, returning `null` instead of throwing on failure.
- */
-export function safeDecrypt(encrypted: string): string | null {
+export async function safeDecrypt(encrypted: string): Promise<string | null> {
   try {
-    return decrypt(encrypted);
-  } catch {
+    return await decrypt(encrypted);
+  } catch (error) {
+    console.warn("[crypto] Decryption failed:", error instanceof Error ? error.message : "unknown");
     return null;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Check if encrypted
-// ---------------------------------------------------------------------------
-
-/**
- * Heuristic check whether a string looks like a payload produced by `encrypt()`.
- *
- * Valid payloads are base64 strings that decode to at least IV_LENGTH + AUTH_TAG_LENGTH bytes.
- */
-export function isEncrypted(value: string): boolean {
-  if (!value || typeof value !== "string") return false;
-
-  // Must be valid base64
-  const base64Regex = /^[A-Za-z0-9+/]+=*$/;
-  if (!base64Regex.test(value)) return false;
-
+export function isEncrypted(value: string | null | undefined): boolean {
+  if (!value) return false;
   try {
     const decoded = Buffer.from(value, "base64");
-    return decoded.length >= IV_LENGTH + AUTH_TAG_LENGTH;
+    return decoded.length >= 33;
   } catch {
     return false;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Re-export constants for external use
-// ---------------------------------------------------------------------------
-
-export { ALGORITHM, KEY_LENGTH, IV_LENGTH, AUTH_TAG_LENGTH };
+export const cryptoService = { encrypt, decrypt, safeDecrypt, isEncrypted };

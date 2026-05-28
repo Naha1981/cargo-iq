@@ -1,7 +1,6 @@
 // POST /api/shipments/[id]/reject - Reject a shipment
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { sanitizeError } from "@/lib/api-utils";
 
 export async function POST(
   request: NextRequest,
@@ -39,6 +38,6 @@ export async function POST(
     return NextResponse.json({ status: "rejected" });
   } catch (error) {
     console.error("Error rejecting shipment:", error);
-    return NextResponse.json({ error: "internal_error", message: sanitizeError(error) }, { status: 500 });
+    return NextResponse.json({ error: "internal_error", message: "Failed to reject" }, { status: 500 });
   }
 }

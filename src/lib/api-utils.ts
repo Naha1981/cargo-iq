@@ -167,3 +167,26 @@ export function safeJsonParse<T>(str: string | null | undefined, fallback: T): T
     return fallback;
   }
 }
+
+// ---------------------------------------------------------------------------
+// sanitizeError
+// ---------------------------------------------------------------------------
+
+/**
+ * Sanitize an error for safe API responses.
+ * Prevents leaking internal error messages, stack traces, or sensitive info.
+ *
+ * In development: returns the actual error message for debugging.
+ * In production: returns a generic message.
+ */
+export function sanitizeError(error: unknown): string {
+  if (process.env.NODE_ENV !== "production") {
+    // Development: show actual error for debugging
+    if (error instanceof Error) return error.message;
+    if (typeof error === "string") return error;
+    return String(error);
+  }
+
+  // Production: generic message
+  return "An internal error occurred. Please try again later.";
+}

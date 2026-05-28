@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const securityHeaders = [
   {
     key: "X-Frame-Options",
-    value: "DENY",
+    value: "SAMEORIGIN",
   },
   {
     key: "X-Content-Type-Options",
@@ -15,11 +15,27 @@ const securityHeaders = [
   },
   {
     key: "X-XSS-Protection",
-    value: "1; mode=block",
+    value: "0",
   },
   {
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=()",
+  },
+];
+
+const apiHeaders = [
+  ...securityHeaders,
+  {
+    key: "Access-Control-Allow-Origin",
+    value: "*",
+  },
+  {
+    key: "Access-Control-Allow-Methods",
+    value: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  },
+  {
+    key: "Access-Control-Allow-Headers",
+    value: "Content-Type, Authorization, X-Org-Id, X-User-Id",
   },
 ];
 
@@ -28,6 +44,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   async headers() {
     return [
+      {
+        source: "/api/(.*)",
+        headers: apiHeaders,
+      },
       {
         source: "/(.*)",
         headers: securityHeaders,

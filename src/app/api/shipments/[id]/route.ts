@@ -4,7 +4,7 @@
 // POST /api/shipments/[id]/reject - Reject shipment
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { safeJsonParse, sanitizeError } from "@/lib/api-utils";
+import { safeJsonParse } from "@/lib/api-utils";
 
 export async function GET(
   _request: NextRequest,
@@ -59,7 +59,7 @@ export async function GET(
   } catch (error) {
     console.error("Error getting shipment:", error);
     return NextResponse.json(
-      { error: "internal_error", message: sanitizeError(error) },
+      { error: "internal_error", message: "Failed to get shipment" },
       { status: 500 }
     );
   }
@@ -116,7 +116,7 @@ export async function PATCH(
   } catch (error) {
     console.error("Error updating shipment:", error);
     return NextResponse.json(
-      { error: "internal_error", message: sanitizeError(error) },
+      { error: "internal_error", message: "Failed to update shipment" },
       { status: 500 }
     );
   }

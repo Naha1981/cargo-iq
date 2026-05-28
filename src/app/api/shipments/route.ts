@@ -1,11 +1,9 @@
 // GET /api/shipments - List shipments with filtering and pagination
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getOrgIdFromRequest, sanitizeError } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
   try {
-    const orgId = await getOrgIdFromRequest(request);
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const shieldStatus = searchParams.get("shield");
@@ -13,7 +11,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
 
-    const where: Record<string, unknown> = { orgId };
+    const where: Record<string, unknown> = {};
 
     if (status) where.status = status;
     if (shieldStatus) where.shieldStatus = shieldStatus;
@@ -59,7 +57,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error listing shipments:", error);
     return NextResponse.json(
-      { error: "internal_error", message: sanitizeError(error) },
+      { error: "internal_error", message: "Failed to list shipments" },
       { status: 500 }
     );
   }
